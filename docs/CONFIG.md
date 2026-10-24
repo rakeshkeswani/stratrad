@@ -120,7 +120,11 @@ refused): check prod `.env` from a prod shell, masked.
 
 Database dump verified 2026-10-16 (by hand): `stratrad_20261016.dump` 55,393 bytes at 12:57:39 IST, `pg_restore
 --list` = 15 tables incl. `audit_log`, `schema_migrations`; failure test (missing database) exit 1, no `.part` left.
-Pending: the first scheduled run (23:30 dump, 01:00 Kopia, 02:30 check 5).
+Scheduled runs verified 2026-10-24 (homelab): 8 nightly dumps 16-23 Oct at 23:31, identical in the pool mirror,
+`pg_restore --list` of 23 Oct lists `audit_log` and `schema_migrations`, check 5 OK. Restores: from
+`~/stratrad/data/db_backups/` (laptop: `X:\data\db_backups\`, read-only) or Kopia, always into a scratch database
+(`createdb stratrad_restore_test && pg_restore -d stratrad_restore_test <dump>`), never over prod. Tell the homelab
+project if the database name, role or `~/.pgpass` entry changes (the dump script depends on them).
 
 ## Kite login (ST-006)
 
