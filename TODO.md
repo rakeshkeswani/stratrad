@@ -1,13 +1,10 @@
 # TODO.md — open items and resume point
 
 Read at session start (after `TECH_DEBT.md` and the tail of `SESSION_LOG.md`). Tick/remove as done.
-Last updated: 2026-10-16 session close (ST-012 and ST-006 live, each with one check due Sat 17 Oct; then ST-007).
+Last updated: 2026-10-24 (ST-006 and ST-012 resolved; next: ST-007).
 
 ## Resume here (new conversation)
-0. **Sat 17 Oct, two closing checks:** (a) ST-012 -- homelab confirms the first scheduled stratrad dump (23:30), the
-   mirror, Kopia 01:00 and health check 5 at 02:30 -> Rakesh "prod confirmed" -> close ST-012. (b) ST-006 -- on prod
-   BEFORE logging in: `python -m scripts.kite_check` must say LOGIN NEEDED (the 06:00 expiry) -> then close ST-006.
-   Next after that: ST-007 (static-IP exit VM; see ST-007.md notes) -> ST-008/009/011.
+0. **ST-007 next** (static IP for order endpoints; idea: static-IP exit VM, see ST-007.md notes) -> ST-008/009/011.
 1. **Strategy verdict (Rakesh):** review document "stratrad strategy review: ST-010 backtests 2014-2023" (Claude
    Docs artifact, numbers after ST-019) holds the cards, comparison, Claude's recommendations and the card change list.
    Open for Rakesh: verdict per strategy; should Test 1 see paper profits given back (ST-010.md "Still open")?
