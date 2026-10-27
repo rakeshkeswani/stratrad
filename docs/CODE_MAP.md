@@ -23,6 +23,8 @@ Present tense. Update when a module, entry point or call chain changes.
 | `python -m scripts.migrate [--status]` | ST-012: apply pending `database/migrations/NNN_*.sql` once each (checksum-guarded) | database `stratrad`, `LOG_DIR` |
 | `python -m scripts.check_database` | ST-012 acceptance: tables, UTC, every role's allowed/refused actions tried for real | `LOG_DIR` |
 | `python -m execution.kite_callback` | ST-006: the Kite login callback (systemd `stratrad-kite-callback` on prod; 127.0.0.1:8765) | `KITE_SESSION_FILE`, `audit_log`, `LOG_DIR/kite_callback.log` |
+| `python -m scripts.kite_ip_check` | ST-007: one order that cannot execute (qty 0, BUY limit Rs 1), sent through the static-IP proxy and directly: proxy -> order refusal, direct -> IP refusal | stdout |
+| `sudo bash deploy/kite-exit/setup.sh` (on the VM) | ST-007: Tailscale (skipped if joined), tinyproxy (rkneo50q only -> api.kite.trade only), ufw, unattended upgrades | the VM |
 | `python -m scripts.kite_check` | ST-006: read-only check of today's Kite session (masked user, funds, holdings count) | stdout |
 | `python -m pytest -q tests` | unit tests (no network) | — |
 

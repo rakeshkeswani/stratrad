@@ -72,3 +72,7 @@ KITE_CALLBACK_PORT = int(os.getenv('KITE_CALLBACK_PORT') or 8765)
 # verifies every Cf-Access-Jwt-Assertion against them and refuses all requests when either is missing.
 KITE_ACCESS_TEAM = (os.getenv('KITE_ACCESS_TEAM') or '').strip()
 KITE_ACCESS_AUD = (os.getenv('KITE_ACCESS_AUD') or '').strip()
+# ST-007: Kite ORDER calls go through the static-IP exit VM (Lightsail Mumbai, 13.205.57.58) over Tailscale; login,
+# profile, holdings and margins stay direct. Prod: http://100.70.129.17:8888 . Empty = no proxy (order calls then fail
+# Kite's static-IP check, by design).
+KITE_ORDER_PROXY = (os.getenv('KITE_ORDER_PROXY') or '').strip()

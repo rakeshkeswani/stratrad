@@ -76,6 +76,7 @@ Fetchers refuse to write to a `//host/...` path, so Windows can never write into
 | `KITE_API_KEY`, `KITE_API_SECRET` | — (prod only) | stratrad's own Kite Connect app (Personal, free) | `core/kite.py`; never printed or logged |
 | `KITE_SESSION_FILE` | `~/.stratrad/kite_session.json` | default | the day's session (mode 600, folder 700; outside the repo and the backup mirror; expires 06:00 IST) |
 | `KITE_CALLBACK_PORT` | `8765` | default | `execution/kite_callback.py` (127.0.0.1 only) |
+| `KITE_ORDER_PROXY` | — (order calls fail Kite's IP check without it) | `http://100.70.129.17:8888` | order calls only (ST-007; `scripts/kite_ip_check.py`, later ST-008/009) |
 | `KITE_ACCESS_TEAM`, `KITE_ACCESS_AUD` | — (callback refuses everything without them) | `soft-cake-51bb.cloudflareaccess.com`; the AUD tag of Access app "stratrad Kite callback" (not secrets) | `kite_callback` verifies each Access JWT against them |
 | `TRENDLYNE_DROP_DIR`, `TELEGRAM_*`, `ANTHROPIC_API_KEY` | — | not yet set | later STs |
 
@@ -136,7 +137,7 @@ project if the database name, role or `~/.pgpass` entry changes (the dump script
 | Service | systemd `stratrad-kite-callback` (`deploy/systemd/stratrad-kite-callback.service`, user rakeshbk, restart on failure); log `LOG_DIR/kite_callback.log` (never the query string or a token) |
 | Session | `KITE_SESSION_FILE`; refused by `core/kite.py` once issued before the most recent 06:00 IST; each login -> `audit_log` (`kite_login`, masked user, no token) |
 | Check | `python -m scripts.kite_check` (read-only: masked user, equity funds, holdings count) |
-| Static IP | only order endpoints need it (SEBI, since 2026-04-01) -> ST-007 |
+| Static IP | only order endpoints need it (SEBI, since 2026-04-01). ST-007: **`13.205.57.58`** (AWS Lightsail Mumbai `stratrad-kite-exit`, static IP `stratrad-kite-exit-ip`), registered as the primary IP in the Kite developer profile 2026-10-27. Order calls go through `KITE_ORDER_PROXY` (tinyproxy on the VM's Tailscale address `100.70.129.17:8888`, accepting only rkneo50q `100.103.189.15`, connecting only to `api.kite.trade`); login/profile/holdings/margins stay direct. VM is `tag:kite-exit` on the tailnet: destination only (homelab grants + policy tests). Check: `python -m scripts.kite_ip_check` |
 
 ## Scheduled jobs
 
