@@ -12,7 +12,7 @@ Workflow, status values and gates: `CLAUDE.md` → "Change workflow".
 | [ST-004](tech-debt/ST-004.md) | Point-in-time top-500 universe | High | Resolved | 2026-10-08 | data | — (prod confirmed 2026-10-14, merge `1fe1a08`) |
 | [ST-005](tech-debt/ST-005.md) | Trendlyne weekly drop + importer | Med | Not started | 2026-10-08 | data | — |
 | [ST-006](tech-debt/ST-006.md) | Kite Connect app + daily login | High | Resolved | 2026-10-08 | execution | — (prod confirmed 2026-10-24) |
-| [ST-007](tech-debt/ST-007.md) | Mumbai VM order gateway (static IP, Tailscale) | High | Not started | 2026-10-08 | execution | — |
+| [ST-007](tech-debt/ST-007.md) | Static IP for Kite orders: Mumbai static-IP exit VM (Lightsail, Tailscale-only proxy) | High | Not started | 2026-10-08 | execution | AWS account (Rakesh); tailnet ACLs (homelab) |
 | [ST-008](tech-debt/ST-008.md) | Guardrail service + guardrails.yaml | High | Not started | 2026-10-08 | execution | — |
 | [ST-009](tech-debt/ST-009.md) | GTT stops, trailing, daily reconciliation | High | Not started | 2026-10-08 | execution | — |
 | [ST-010](tech-debt/ST-010.md) | Baseline momentum strategy + quick backtest | High | Resolved | 2026-10-08 | strategy | — (prod confirmed 2026-10-15; verdict + card changes open in ST-010.md) |
