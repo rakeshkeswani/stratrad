@@ -74,7 +74,7 @@ and the ownership map goes to the MyInvestIQ repo. Input to the roll-out plan.
 | News and geopolitical | MIQ (NewsAPI, feedparser, macro) | stratrad | new stratrad scope; headlines, links, own summaries | F |
 | Stock master: identifiers, names, official BSE classification (weekly) | MIQ (`stock_master`) | stratrad | Rakesh 2026-10-27; stratrad needs sectors for ST-008's per-sector caps | F |
 | Sector P/E from the NSE index archive (daily) | MIQ (`sector_master.avg_pe_ratio`) | stratrad (data) | with the index-data takeover | F |
-| 13-sector scheme, P/E flag thresholds, Haiku sector metrics | MIQ (`sector_master`) | MIQ (analysis) | Claude's suggested split of Rakesh's "ST" -- **to confirm** | -- |
+| 13-sector scheme, P/E flag thresholds, Haiku sector metrics | MIQ (`sector_master`) | MIQ (analysis) | Rakesh 2026-10-27: data -> stratrad, analysis -> MIQ | -- |
 | AI analysis (macro, sector, stock) | MIQ via Claude API | MIQ via Claude Code on rkneo50q | personal use only for now (section 7) | -- |
 | Reports, email, Telegram bot, portal, subscriptions | MIQ | MIQ | user flow stays intact | -- |
 | Stock and market dashboards | -- | MIQ | the recast; reads stratrad data | -- |
@@ -122,7 +122,8 @@ Track S needs from Track F: an up-to-date panel and corporate actions before the
    user.
 3. ~~Owners of market feeds, earnings, stock/sector master; stratrad dashboard; health view~~ -- decided by Rakesh
    2026-10-27 (section 4): feeds, earnings data and stock master -> stratrad; earnings analysis -> MIQ; dashboards ->
-   MIQ reading stratrad; one combined health view. Open: confirm the sector-master split (data vs analysis).
+   MIQ reading stratrad; one combined health view; sector master split (P/E data -> stratrad; 13-sector scheme,
+   thresholds, Haiku metrics -> MIQ).
 
 ## 8. Next steps
 
