@@ -68,18 +68,21 @@ and the ownership map goes to the MyInvestIQ repo. Input to the roll-out plan.
 | Point-in-time universe (Nifty 500) | stratrad | stratrad | semi-annual | -- |
 | FII/DII daily flows | MIQ (`fii_daily_flow`) | stratrad | MIQ reads stratrad's copy | F |
 | Macro market data (indices, VIX, INR, crude, RBI rate) | MIQ | stratrad (data); MIQ (display, AI synthesis) | | F |
-| Market feeds: bulk deals, announcements, SEBI orders | MIQ | stratrad (data) -- **TBD** | earnings detection depends on announcements | F (later) |
-| Earnings filings: detect, analyse, deliver | MIQ | **TBD** (data stratrad, analysis MIQ?) | | -- |
+| Market feeds: bulk deals, announcements, SEBI orders | MIQ | stratrad | Rakesh 2026-10-27; earnings detection depends on announcements | F (later) |
+| Earnings filings: detect + PDF pulls (data) | MIQ | stratrad | Rakesh 2026-10-27: stratrad = data incl. pulls | F (later) |
+| Earnings: AI analysis + delivery | MIQ | MIQ | Rakesh 2026-10-27: MIQ = analysis | -- |
 | News and geopolitical | MIQ (NewsAPI, feedparser, macro) | stratrad | new stratrad scope; headlines, links, own summaries | F |
-| Stock master / sector master | MIQ (weekly) | **TBD** | | -- |
+| Stock master: identifiers, names, official BSE classification (weekly) | MIQ (`stock_master`) | stratrad | Rakesh 2026-10-27; stratrad needs sectors for ST-008's per-sector caps | F |
+| Sector P/E from the NSE index archive (daily) | MIQ (`sector_master.avg_pe_ratio`) | stratrad (data) | with the index-data takeover | F |
+| 13-sector scheme, P/E flag thresholds, Haiku sector metrics | MIQ (`sector_master`) | MIQ (analysis) | Claude's suggested split of Rakesh's "ST" -- **to confirm** | -- |
 | AI analysis (macro, sector, stock) | MIQ via Claude API | MIQ via Claude Code on rkneo50q | personal use only for now (section 7) | -- |
 | Reports, email, Telegram bot, portal, subscriptions | MIQ | MIQ | user flow stays intact | -- |
 | Stock and market dashboards | -- | MIQ | the recast; reads stratrad data | -- |
 | Strategy research, backtests, report cards | stratrad | stratrad | | S |
 | Signals, proposals, approvals, orders, GTT stops, guardrails, Kite | stratrad (partly built) | stratrad | ST-007/008/009/011 | S |
-| stratrad dashboard (strategy status, costs) | -- (ST-017 idea) | **TBD** (MIQ dashboard reading stratrad, or stratrad's own) | | -- |
+| stratrad dashboard (strategy status, costs) | -- (ST-017 idea) | MIQ (dashboard reading stratrad's data) | Rakesh 2026-10-27; ST-017 recast accordingly | -- |
 | Approval channel (Telegram) | -- | stratrad's own bot (recommended) | separate from MIQ's bots | S |
-| QA / freshness checks | MIQ for its pipeline | each owner checks its own datasets; one combined morning view **TBD** | | F |
+| QA / freshness checks | MIQ for its pipeline | each owner checks its own datasets; **one combined health view** for both | Rakesh 2026-10-27 | F |
 | Scheduling | n8n (both) | n8n (both) | jobs grouped per program | -- |
 | Backups | homelab: Job 2 (MIQ), Job 3 + dump (stratrad), Kopia | homelab | tell homelab on any DB/role change | -- |
 
@@ -94,7 +97,8 @@ and the ownership map goes to the MyInvestIQ repo. Input to the roll-out plan.
 | FII/DII flows | stratrad (today: MIQ `fii_daily_flow`) | TBD | both | 19:30 IST | Job 3 / Job 2 |
 | Macro market data | stratrad (today: MIQ) | TBD | both | 06:00 IST | |
 | News and geopolitical | stratrad (today: MIQ, inside the pipeline) | TBD | both | 06:00 IST | |
-| Market feeds, announcements | **TBD** (today: MIQ) | `portfolio_watch` today | MIQ | 06:00 IST | Job 2 |
+| Market feeds, announcements, earnings filings (PDFs) | stratrad (today: MIQ) | `portfolio_watch` today; TBD | both | 06:00 IST | Job 2 today |
+| Stock master (reference) | stratrad (today: MIQ `stock_master`) | TBD | both | weekly | Job 2 today |
 | AI analyses, reports, users, subscriptions | MIQ | `portfolio_watch` | MIQ | 06:30 IST | Job 2 |
 | Backtests, report cards | stratrad | `stratrad/data/backtests` | stratrad (MIQ dashboards later) | on demand | Job 3 + Kopia |
 | Strategies, signals, orders, positions, audit | stratrad | database `stratrad` | stratrad (MIQ read-only later) | live | nightly dump + Kopia |
@@ -116,9 +120,9 @@ Track S needs from Track F: an up-to-date panel and corporate actions before the
    MIQ serves other users (a subscription is licensed for the subscriber's own use).
 2. **Exchange data on dashboards for other users** may need an NSE data licence; not needed while Rakesh is the only
    user.
-3. Owner of market feeds, earnings, stock/sector master (TBD rows in section 4).
-4. stratrad dashboard: MIQ dashboard reading stratrad, or stratrad's own.
-5. One combined morning health view for both programs, or one per program.
+3. ~~Owners of market feeds, earnings, stock/sector master; stratrad dashboard; health view~~ -- decided by Rakesh
+   2026-10-27 (section 4): feeds, earnings data and stock master -> stratrad; earnings analysis -> MIQ; dashboards ->
+   MIQ reading stratrad; one combined health view. Open: confirm the sector-master split (data vs analysis).
 
 ## 8. Next steps
 
