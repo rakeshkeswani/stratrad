@@ -37,6 +37,11 @@ if [[ $JOINED == no ]]; then
   unset TS_AUTHKEY
 fi
 
+# Prefer IPv4: Zerodha has the IPv4 static IP registered; on this dual-stack VM a call to api.kite.trade over IPv6
+# would arrive from the instance's IPv6 address and be refused (seen 2026-10-27).
+echo "== prefer IPv4 for outgoing connections"
+grep -q '^precedence ::ffff:0:0/96  100' /etc/gai.conf || echo 'precedence ::ffff:0:0/96  100' >> /etc/gai.conf
+
 echo "== tinyproxy: only rkneo50q, only api.kite.trade:443"
 cat > /etc/tinyproxy/filter <<'EOF'
 ^api\.kite\.trade$
