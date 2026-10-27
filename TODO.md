@@ -1,10 +1,13 @@
 # TODO.md — open items and resume point
 
 Read at session start (after `TECH_DEBT.md` and the tail of `SESSION_LOG.md`). Tick/remove as done.
-Last updated: 2026-10-24 (ST-006 and ST-012 resolved; next: ST-007).
+Last updated: 2026-10-27 (recast -> ST-021 architecture; ST-007 static IP verified, rebuild drill before go-live).
 
 ## Resume here (new conversation)
-0. **ST-007 next** (static IP for order endpoints; idea: static-IP exit VM, see ST-007.md notes) -> ST-008/009/011.
+0. **Two tracks in parallel (docs/ARCHITECTURE.md s.6):** Track S next = ST-008 guardrails -> ST-009 GTT -> ST-011
+   Telegram -> verdict -> go live; Track F next = ST-021 follow-ups (MIQ brief; first Track F issue: stratrad's own daily
+   corporate-action fetch). **Go-live checklist so far:** ST-007 rebuild drill (+ KITE_ORDER_PROXY -> MagicDNS name);
+   strategy verdict; Test 1 paper-profits question.
 1. **Strategy verdict (Rakesh):** review document "stratrad strategy review: ST-010 backtests 2014-2023" (Claude
    Docs artifact, numbers after ST-019) holds the cards, comparison, Claude's recommendations and the card change list.
    Open for Rakesh: verdict per strategy; should Test 1 see paper profits given back (ST-010.md "Still open")?
