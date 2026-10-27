@@ -95,3 +95,24 @@
   `<pw>` placeholder; first Kite login used the old app's key (new app `stratrad` created).
 - Status at close: main `d6ce146`. Resume: `TODO.md` item 0 -- ST-012 scheduled-backup report and ST-006 expiry check
   on Sat 17 Oct, then ST-007.
+
+## 2026-10-24 to 2026-10-27 — ST-006/012 closed; product recast (ST-021); ST-007 static IP live
+- ST-006 and ST-012 resolved (prod confirmed 2026-10-24): session expiry verified (16 Oct session refused); 8 scheduled
+  DB dumps 16-23 Oct verified by homelab (mirror, restore list, health check 5).
+- **Recast (Rakesh, 2026-10-27):** stratrad = foundation (daily data, news, strategies); MyInvestIQ = dashboards +
+  analysis, keeps its user flow, moves API calls to Claude Code on rkneo50q; Rakesh the only user for now; revenue from
+  stratrad first; stratrad runs two tracks in parallel (S: strategy -> orders, full steam; F: daily ingestion).
+  `docs/ARCHITECTURE.md` (ST-021, merged): principles (one writer per dataset, 4-step moves, loud freshness checks),
+  separation of duties current/end state, ownership map, tracks; decisions: feeds, earnings data, stock master and sector
+  P/E data -> stratrad; earnings analysis, 13-sector scheme, thresholds, Haiku metrics -> MIQ; stratrad dashboard built
+  in MIQ; one combined health view. Open in ST-021: MIQ brief, Track F issues, roll-out plan.
+- ST-007: AWS account (paid plan; root + `rakesh-admin` MFA, USD 10 budget); Lightsail Mumbai `stratrad-kite-exit`,
+  static IP **13.205.57.58** registered with Zerodha; tinyproxy (rkneo50q only -> api.kite.trade only), ufw, auto
+  updates; homelab: `tag:kite-exit` destination-only (allow-all grant replaced, policy tests). `kite_ip_check` PASS after
+  an IPv6 finding (VM preferred IPv6 -> Kite refused; fixed via gai.conf). No public ports; no secrets on the VM; SSH only
+  over the tailnet with Rakesh's own key; snapshot taken. Rebuild drill deferred to before go-live.
+- Slips: setup.sh assumed the VM was not yet on the tailnet (key already spent) -> made re-runnable; a broad `*.pem`
+  search listed public CA certs; awk `$` mangled by PowerShell quoting. OneDrive "Deletion of directory failed" again on
+  branch switches after new folders (harmless).
+- Status at close: main after the ST-007 records merge. Resume: `TODO.md` item 0 (two tracks; Track S next = ST-008,
+  Track F next = MIQ brief + stratrad's own corporate-action fetch; go-live checklist).
