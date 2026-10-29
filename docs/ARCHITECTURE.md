@@ -1,7 +1,9 @@
 # ARCHITECTURE.md — stratrad + MyInvestIQ as one system
 
-Status: **DRAFT for Rakesh's review** (2026-10-27, ST-021). Becomes present tense once agreed; a copy of the decision
-and the ownership map goes to the MyInvestIQ repo. Input to the roll-out plan.
+Status: **APPROVED by Rakesh 2026-10-29** as written (ST-021, drafted 2026-10-27). A copy of the decision and the
+ownership map goes to the MyInvestIQ repo. Input to the roll-out plan.
+
+Still open in ST-021 (section 8): the MyInvestIQ brief, the Track F issues, and the roll-out plan.
 
 ## 1. Decision (Rakesh, 2026-10-27)
 
