@@ -119,7 +119,7 @@ def _block(rule: str, detail: str) -> Decision:
     return Decision(allow=False, rule=rule, detail=detail)
 
 
-def _check_freshness(state: PortfolioState, limits: dict[str, Any]) -> Decision | None:
+def _check_freshness(request: BuyRequest, state: PortfolioState, limits: dict[str, Any]) -> Decision | None:
     """G13: the data behind every other rule must be current. Missing age = block."""
     fresh = limits['freshness']
     if state.panel_age_trading_days is None:
@@ -135,7 +135,7 @@ def _check_freshness(state: PortfolioState, limits: dict[str, Any]) -> Decision 
     return None
 
 
-def _check_tier(state: PortfolioState, limits: dict[str, Any]) -> Decision | None:
+def _check_tier(request: BuyRequest, state: PortfolioState, limits: dict[str, Any]) -> Decision | None:
     """G11: the rolling 12-month loss tier gates new buys entirely."""
     if state.loss_tier is None:
         return _block('G11', 'loss tier unknown')
@@ -179,7 +179,7 @@ def _check_corporate_action(request: BuyRequest, state: PortfolioState, limits: 
     return None
 
 
-def _check_risk(request: BuyRequest, limits: dict[str, Any]) -> Decision | None:
+def _check_risk(request: BuyRequest, state: PortfolioState, limits: dict[str, Any]) -> Decision | None:
     """G06: every lot needs a stop, and the entry-to-stop risk is capped."""
     risk = limits['risk']
     if risk['stop_required'] and request.stop_price is None:
@@ -193,60 +193,101 @@ def _check_risk(request: BuyRequest, limits: dict[str, Any]) -> Decision | None:
     return None
 
 
-def _check_sizing(request: BuyRequest, state: PortfolioState, limits: dict[str, Any]) -> Decision | None:
-    """G05/G09/G07/G08/G04/G03: the caps, cheapest first, portfolio-wide last."""
+def _check_lot_size(request: BuyRequest, state: PortfolioState, limits: dict[str, Any]) -> Decision | None:
+    """G05: one lot's cost."""
     capital = limits['capital']
-    amount = request.amount
+    if request.amount > capital['max_lot_amount']:
+        return _block('G05', f'lot of Rs {request.amount:,.2f} exceeds Rs {capital["max_lot_amount"]:,}')
+    return None
 
-    if amount > capital['max_lot_amount']:
-        return _block('G05', f'lot of Rs {amount:,.2f} exceeds Rs {capital["max_lot_amount"]:,}')
 
+def _check_per_stock(request: BuyRequest, state: PortfolioState, limits: dict[str, Any]) -> Decision | None:
+    """G09: one stock across ALL stratrad strategies, as a fraction of the capital cap."""
+    capital = limits['capital']
     per_stock_cap = capital['cap'] * capital['per_stock_pct']
     if state.cost_by_stock is None:
         return _block('G09', 'open cost per stock unknown')
-    held_stock = state.cost_by_stock.get(request.symbol, 0.0)
-    if held_stock + amount > per_stock_cap:
-        return _block('G09', f'{request.symbol} would reach Rs {held_stock + amount:,.2f} of Rs {per_stock_cap:,.2f}')
+    held = state.cost_by_stock.get(request.symbol, 0.0)
+    if held + request.amount > per_stock_cap:
+        return _block('G09', f'{request.symbol} would reach Rs {held + request.amount:,.2f} of Rs {per_stock_cap:,.2f}')
+    return None
 
+
+def _check_per_strategy(request: BuyRequest, state: PortfolioState, limits: dict[str, Any]) -> Decision | None:
+    """G07: one strategy's open cost."""
+    capital = limits['capital']
     if state.cost_by_strategy is None:
         return _block('G07', 'open cost per strategy unknown')
-    held_strategy = state.cost_by_strategy.get(request.strategy, 0.0)
-    if held_strategy + amount > capital['per_strategy']:
+    held = state.cost_by_strategy.get(request.strategy, 0.0)
+    if held + request.amount > capital['per_strategy']:
         return _block(
             'G07',
-            f'strategy {request.strategy} would reach Rs {held_strategy + amount:,.2f} '
+            f'strategy {request.strategy} would reach Rs {held + request.amount:,.2f} '
             f'of Rs {capital["per_strategy"]:,}',
         )
+    return None
 
+
+def _check_per_sector(request: BuyRequest, state: PortfolioState, limits: dict[str, Any]) -> Decision | None:
+    """G08: one sector's open cost. An unknown sector blocks (fail-closed)."""
+    capital = limits['capital']
     if request.sector is None:
         return _block('G08', f'sector unknown for {request.symbol}')
     if state.cost_by_sector is None:
         return _block('G08', 'open cost per sector unknown')
-    held_sector = state.cost_by_sector.get(request.sector, 0.0)
-    if held_sector + amount > capital['per_sector']:
+    held = state.cost_by_sector.get(request.sector, 0.0)
+    if held + request.amount > capital['per_sector']:
         return _block(
             'G08',
-            f'sector {request.sector} would reach Rs {held_sector + amount:,.2f} of Rs {capital["per_sector"]:,}',
+            f'sector {request.sector} would reach Rs {held + request.amount:,.2f} of Rs {capital["per_sector"]:,}',
         )
+    return None
 
+
+def _check_weekly(request: BuyRequest, state: PortfolioState, limits: dict[str, Any]) -> Decision | None:
+    """G04: the week's new-buy pace."""
+    capital = limits['capital']
     if state.week_buys_amount is None:
-        return _block('G04', 'this week\'s buys unknown')
-    if state.week_buys_amount + amount > capital['weekly_new_buys']:
+        return _block('G04', "this week's buys unknown")
+    if state.week_buys_amount + request.amount > capital['weekly_new_buys']:
         return _block(
             'G04',
-            f'week would reach Rs {state.week_buys_amount + amount:,.2f} of Rs {capital["weekly_new_buys"]:,}',
+            f'week would reach Rs {state.week_buys_amount + request.amount:,.2f} '
+            f'of Rs {capital["weekly_new_buys"]:,}',
         )
+    return None
 
+
+def _check_capital(request: BuyRequest, state: PortfolioState, limits: dict[str, Any]) -> Decision | None:
+    """G03: the buy kitty, at the cost of open lots. Headroom returns when a lot exits."""
+    capital = limits['capital']
     if state.open_cost_total is None:
         return _block('G03', 'open cost of stratrad lots unknown')
-    if state.open_cost_total + amount > capital['cap']:
+    if state.open_cost_total + request.amount > capital['cap']:
         headroom = capital['cap'] - state.open_cost_total
         return _block(
             'G03',
-            f'capital cap: headroom is Rs {headroom:,.2f}, this lot costs Rs {amount:,.2f} '
+            f'capital cap: headroom is Rs {headroom:,.2f}, this lot costs Rs {request.amount:,.2f} '
             f'(cap Rs {capital["cap"]:,} at cost)',
         )
     return None
+
+
+# Evaluation order. Data freshness first, so a stale-data block is never masked by a later cap;
+# then the tier, what may be bought, the ex-date blackout, risk, and the caps cheapest-first.
+RULE_CHECKS = (
+    _check_freshness,
+    _check_tier,
+    _check_instrument,
+    _check_corporate_action,
+    _check_risk,
+    _check_lot_size,
+    _check_per_stock,
+    _check_per_strategy,
+    _check_per_sector,
+    _check_weekly,
+    _check_capital,
+)
 
 
 def evaluate(request: BuyRequest, state: PortfolioState, limits: dict[str, Any], stage: str) -> Decision:
@@ -269,14 +310,8 @@ def evaluate(request: BuyRequest, state: PortfolioState, limits: dict[str, Any],
     if request.qty <= 0 or request.limit_price <= 0:
         return _block('G05', f'qty {request.qty} and limit price {request.limit_price} must both be positive')
 
-    for decision in (
-        _check_freshness(state, limits),
-        _check_tier(state, limits),
-        _check_instrument(request, state, limits),
-        _check_corporate_action(request, state, limits),
-        _check_risk(request, limits),
-        _check_sizing(request, state, limits),
-    ):
+    for check in RULE_CHECKS:
+        decision = check(request, state, limits)
         if decision is not None:
             return decision
 
@@ -290,3 +325,23 @@ def evaluate(request: BuyRequest, state: PortfolioState, limits: dict[str, Any],
         flags.append('G14:not-evaluated')
 
     return Decision(allow=True, rule='', detail=f'{request.symbol} Rs {request.amount:,.2f} allowed', flags=tuple(flags))
+
+
+def evaluate_all(request: BuyRequest, state: PortfolioState, limits: dict[str, Any]) -> list[Decision]:
+    """Run every rule and return each block, instead of stopping at the first one.
+
+    `evaluate` is what gates an order (first block wins, one guardrail_events row). This is for
+    explaining a decision to Rakesh -- a lot can breach several limits at once and seeing only the
+    first is misleading. Returns [] when nothing blocks.
+    """
+    guards = []
+    if request.strategy == MANUAL_STRATEGY:
+        guards.append(_block('G01', "strategy 'manual' is Rakesh's own book; stratrad never orders for it"))
+    if request.qty <= 0 or request.limit_price <= 0:
+        guards.append(_block('G05', f'qty {request.qty} and limit price {request.limit_price} must both be positive'))
+        return guards
+    for check in RULE_CHECKS:
+        decision = check(request, state, limits)
+        if decision is not None:
+            guards.append(decision)
+    return guards
