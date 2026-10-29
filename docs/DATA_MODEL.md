@@ -65,7 +65,9 @@ data available at D's close; sectors are dated (`valid_from`) because classifica
 snappy compression, partitioned by year if a file grows past ~1 GB.
 
 **Curated, in git (`config/`):** `ca_overrides.csv`, `ca_exceptions.csv`, `symbol_changes_extra.csv`,
-`symbol_exceptions.csv`, later `guardrails.yaml` and `strategies/*.yaml`. Every row has a reason.
+`symbol_exceptions.csv`, `demergers.csv`, `guardrails.toml` (ST-008) and `strategies/*.toml`. Every row has a reason.
+TOML rather than YAML for the two config files (ST-008, 2026-10-29): `tomllib` is in the standard library and has no
+writer, so "code and ML never write guardrails" is enforced by the parser, not only by convention.
 
 ## 4. Operational store (PostgreSQL `stratrad`, ST-012)
 
