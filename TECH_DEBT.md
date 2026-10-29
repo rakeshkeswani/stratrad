@@ -13,7 +13,7 @@ Workflow, status values and gates: `CLAUDE.md` → "Change workflow".
 | [ST-005](tech-debt/ST-005.md) | Trendlyne weekly drop + importer | Med | Not started | 2026-10-08 | data | — |
 | [ST-006](tech-debt/ST-006.md) | Kite Connect app + daily login | High | Resolved | 2026-10-08 | execution | — (prod confirmed 2026-10-24) |
 | [ST-007](tech-debt/ST-007.md) | Static IP for Kite orders: Mumbai static-IP exit VM (Lightsail, Tailscale-only proxy) | High | In progress — rebuild drill before go-live | 2026-10-08 | execution | static IP 13.205.57.58 verified 2026-10-27; drill deferred |
-| [ST-008](tech-debt/ST-008.md) | Guardrail service + guardrails.yaml | High | Not started | 2026-10-08 | execution | — |
+| [ST-008](tech-debt/ST-008.md) | Guardrail service + guardrails.toml | High | In progress — branch st/ST-008-guardrails | 2026-10-08 | execution | limits, evaluator, CLI, 38 tests committed (4 commits, unmerged); left: service layer + `guardrail_events`, blocked on the `stock_master` schema paste |
 | [ST-009](tech-debt/ST-009.md) | GTT stops, trailing, daily reconciliation | High | Not started | 2026-10-08 | execution | — |
 | [ST-010](tech-debt/ST-010.md) | Baseline momentum strategy + quick backtest | High | Resolved | 2026-10-08 | strategy | — (prod confirmed 2026-10-15; verdict + card changes open in ST-010.md) |
 | [ST-011](tech-debt/ST-011.md) | Telegram proposal and approval flow | High | Not started | 2026-10-08 | notify | — |

@@ -105,7 +105,7 @@ Still open in ST-021 (section 8): the MyInvestIQ brief, the Track F issues, and 
 | Backtests, report cards | stratrad | `stratrad/data/backtests` | stratrad (MIQ dashboards later) | on demand | Job 3 + Kopia |
 | Strategies, signals, orders, positions, audit | stratrad | database `stratrad` | stratrad (MIQ read-only later) | live | nightly dump + Kopia |
 
-## 6. stratrad's two parallel tracks (Rakesh: both full steam)
+## 6. stratrad's two tracks (Rakesh 2026-10-29: Track S first)
 
 **Track S -- strategy to orders (revenue first):** ST-007 static IP for orders -> ST-008 guardrails -> ST-009 GTT stops
 + reconciliation -> ST-011 Telegram approvals -> strategy verdict (open in ST-010) -> go live within the limits.
@@ -114,7 +114,16 @@ Still open in ST-021 (section 8): the MyInvestIQ brief, the Track F issues, and 
 ST-020 and the 2024-26 held-out run) -> daily panel with a freshness check -> FII/DII -> macro -> news and geopolitical
 -> read access for MIQ. Each takeover follows principle 2.
 
-Track S needs from Track F: an up-to-date panel and corporate actions before the first live signal.
+**Priority (Rakesh, 2026-10-29):** Track S first, and the ST track as a whole. Track F items are taken up when Track S
+needs them -- as the sectors question was on 2026-10-29, where a read-only grant on `portfolio_watch.stock_master`
+unblocked ST-008 and the proper takeover stayed on Track F.
+
+**Not deferrable, though.** Three Track F items sit on the critical path and gate Track S whatever the priority:
+daily bhavcopy + calendar, daily corporate actions + demergers, and the daily panel refresh with its freshness check.
+They gate (a) the 2024-26 held-out run, (b) the strategy verdict, since a strategy is considered on the full 2014-2026
+span (ST-022), and (c) go-live, because ST-008's G13 blocks on a stale panel or stale corporate actions by design.
+The rest of Track F (FII/DII, macro, news, market feeds, earnings pulls, stock master, read access for MIQ) is
+genuinely deferrable.
 
 ## 7. Open questions
 

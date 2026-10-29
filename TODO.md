@@ -1,13 +1,22 @@
 # TODO.md — open items and resume point
 
 Read at session start (after `TECH_DEBT.md` and the tail of `SESSION_LOG.md`). Tick/remove as done.
-Last updated: 2026-10-27 (recast -> ST-021 architecture; ST-007 static IP verified, rebuild drill before go-live).
+Last updated: 2026-10-29 (Track S prioritised; ST-021 approved; ST-008 rules built; ST-022 raised).
 
 ## Resume here (new conversation)
-0. **Two tracks in parallel (docs/ARCHITECTURE.md s.6):** Track S next = ST-008 guardrails -> ST-009 GTT -> ST-011
-   Telegram -> verdict -> go live; Track F next = ST-021 follow-ups (MIQ brief; first Track F issue: stratrad's own daily
-   corporate-action fetch). **Go-live checklist so far:** ST-007 rebuild drill (+ KITE_ORDER_PROXY -> MagicDNS name);
-   strategy verdict (ST-022). Test 1 paper-profits question: closed 2026-10-29.
+0. **Track S first (Rakesh 2026-10-29; docs/ARCHITECTURE.md s.6).** Track F items are taken up when Track S needs them.
+   **Next: finish ST-008** -- branch `st/ST-008-guardrails` is 4 commits ahead of main and incomplete. Left on it:
+   (a) the service layer (`execution/guardrail_service.py`: gather state, write one `guardrail_events` row per check)
+   -- **blocked on the `stock_master` schema**, which Rakesh pastes in chat (the X: share is unreadable to Claude,
+   see LEARNINGS 2026-10-29); (b) DATA_MODEL.md s.1/s.4/s.6 still say `stratrad_ro` has SELECT on `corporate_actions`
+   and `fii_daily_flow` **only** -- update once the grant is confirmed from the `\dp` output; (c) the MyInvestIQ-side
+   TD- issue recording the grant, and the note to homelab (role change -> backup chain).
+   Then ST-009 GTT stops -> ST-011 Telegram -> verdict -> go live.
+   **Gates that are not deferrable** (Track F, on the critical path): daily bhavcopy + calendar, daily corporate
+   actions + demergers, daily panel + freshness check. They gate the held-out run, the verdict and go-live (G13).
+   None has an ST number yet -- raising them is one of ST-021's three leftovers.
+   **Go-live checklist so far:** ST-007 rebuild drill (+ KITE_ORDER_PROXY -> MagicDNS name); strategy verdict (ST-022);
+   the three Track F gates above. Test 1 paper-profits question: closed 2026-10-29.
    Also open: ST-022 strategy research loop (design to be proposed).
 1. **Strategy verdict (Rakesh):** review document "stratrad strategy review: ST-010 backtests 2014-2023" (Claude
    Docs artifact, numbers after ST-019) holds the cards, comparison, Claude's recommendations and the card change list.

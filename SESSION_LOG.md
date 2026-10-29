@@ -116,3 +116,34 @@
   branch switches after new folders (harmless).
 - Status at close: main after the ST-007 records merge. Resume: `TODO.md` item 0 (two tracks; Track S next = ST-008,
   Track F next = MIQ brief + stratrad's own corporate-action fetch; go-live checklist).
+
+## 2026-10-29 - ST-021 approved; ST-008 rules built and tested; ST-022 raised; Track S prioritised
+- **ST-021 approved as written** (Rakesh): `docs/ARCHITECTURE.md` status -> APPROVED, index next action replaced with
+  its three remaining deliverables (MIQ brief, Track F issues, roll-out plan). Merge `34afe01`. Stays open on purpose.
+- **ST-008 design approved** (rules G01-G14; the proposed G10 max-positions dropped). Decisions (Rakesh): no cap on the
+  number of positions -- the capital cap is the only size constraint and is a **revolving kitty** (headroom =
+  Rs 1,00,000 minus the cost of open lots; a GTT exit returns that lot's cost the same day); **profits never re-enter
+  the kitty**, it rises only when Rakesh allocates more; sectors via a grant of SELECT on `portfolio_watch.stock_master`
+  to `stratrad_ro` (interim, retired when Track F takes stock master over) rather than a hand-refreshed snapshot;
+  CA blackout 5 trading days; **fail-closed** -- a missing or stale input blocks, never allows.
+- ST-008 built on `st/ST-008-guardrails` (4 commits, 38 tests green): `config/guardrails.toml` (TOML, not YAML -- see
+  LEARNINGS), `execution/guardrails.py` (pure evaluator, no I/O; `load_limits` raises rather than defaulting, so a
+  deploy without limits cannot start permissive), `scripts/guardrail_check.py` (dry run; `--all`), plus `evaluate_all`
+  beside `evaluate` so the order path keeps first-block-wins while explanations stay complete. CLAUDE.md and
+  DATA_MODEL.md corrected to `.toml`; the limits table dropped "max 10 positions" and gained the per-stock row.
+  **Not done:** the service layer (state gathering + `guardrail_events` writes), blocked on the `stock_master` schema.
+- **ST-022 raised** (Rakesh: ability to adjust and re-test candidate strategies): candidate registry, append-only
+  re-test log, hold-out enforcement. Evaluation decisions recorded there (ST-010 left frozen with a reference note):
+  Test 1 keeps open lots at their own buy price -- paper profits count in neither direction (closes ST-010's last open
+  question); a strategy is considered on the full 2014-2026 span while development stays confined to 2014-2023;
+  `rakesh_top4, faithful` is a yardstick, not a candidate, so the candidates are `rakesh_top4, limits` and
+  `baseline_momentum`. Merge `91bd9ef`. The verdict is still Rakesh's and cannot be final until the held-out run.
+- **Priority (Rakesh, 2026-10-29): Track S first, and the ST track as a whole**; Track F items are taken up when Track S
+  needs them. Caveat recorded in ARCHITECTURE s.6: the daily panel and the daily corporate-action fetch are not
+  deferrable -- they gate the held-out run, the verdict (ST-022) and go-live (G13 blocks on stale data by design).
+- Slips: the filesystem connector listed `X:\` and the UNC shares as allowed while refusing to resolve them, so the
+  prod `stock_master` schema could not be read and is still outstanding (LEARNINGS); a G05 test breached two rules at
+  once and failed naming the other one (LEARNINGS); "already merged" turned out to be a commit, not a merge -- checked
+  before building on it.
+- Status at close: main `91bd9ef`; `st/ST-008-guardrails` 4 commits ahead of main, unmerged and incomplete.
+  Resume: `TODO.md` item 0.
