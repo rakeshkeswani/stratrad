@@ -7,11 +7,18 @@ Last updated: 2026-10-27 (recast -> ST-021 architecture; ST-007 static IP verifi
 0. **Two tracks in parallel (docs/ARCHITECTURE.md s.6):** Track S next = ST-008 guardrails -> ST-009 GTT -> ST-011
    Telegram -> verdict -> go live; Track F next = ST-021 follow-ups (MIQ brief; first Track F issue: stratrad's own daily
    corporate-action fetch). **Go-live checklist so far:** ST-007 rebuild drill (+ KITE_ORDER_PROXY -> MagicDNS name);
-   strategy verdict; Test 1 paper-profits question.
+   strategy verdict (ST-022). Test 1 paper-profits question: closed 2026-10-29.
+   Also open: ST-022 strategy research loop (design to be proposed).
 1. **Strategy verdict (Rakesh):** review document "stratrad strategy review: ST-010 backtests 2014-2023" (Claude
    Docs artifact, numbers after ST-019) holds the cards, comparison, Claude's recommendations and the card change list.
-   Open for Rakesh: verdict per strategy; should Test 1 see paper profits given back (ST-010.md "Still open")?
-   Decided 2026-10-15: capital grows only when Rakesh allocates more (no cap-growth re-test). No card observations yet.
+   Decided 2026-10-29 (recorded in ST-022): Test 1 keeps open lots at their own buy price (paper profits counted in
+   neither direction -- the card-change question is closed); a strategy is considered on the full 2014-2026 span while
+   development stays confined to 2014-2023; `rakesh_top4, faithful` is a yardstick, not a candidate, so the candidates
+   are `rakesh_top4, limits` and `baseline_momentum`.
+   **Still open for Rakesh:** the verdict on those two (go live / plumbing baseline / smaller size / adjust and
+   re-test) -- and per the span decision it cannot be final until the 2024-26 held-out run, which needs Track F's
+   daily corporate-action fetch.
+   Decided 2026-10-15: capital grows only when Rakesh allocates more (no cap-growth re-test).
 2. Then ST-012 (database; before execution) → ST-006/007/008/009/011; ST-005 (sectors); ST-017/018 later.
 3. Prod SSH paste glitch: `echo 'set enable-bracketed-paste off' >> ~/.inputrc` (new session), or update PuTTY.
 
