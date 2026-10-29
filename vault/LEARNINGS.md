@@ -59,3 +59,33 @@ After X: was remapped from `\\100.103.189.15\strategy-trader` to `\\...\stratrad
 ("symlink target outside allowed directories") although X:\ was allowed. The filesystem extension resolves each allowed
 drive to its network path **at startup** and checks both. **After remapping a drive, restart the Claude desktop app.**
 Same day (homelab): FFS batch files cancel on any warning, so a new target folder must exist before a job's first run.
+
+## 2026-10-29 — the restart fixed the listing, not the access
+Sequel to 2026-10-14. The connector's allowed list silently shrank mid-session from ten entries to five (every mapped
+drive and UNC share gone). Restarting the Claude desktop app restored the full list — and reading `X:\logs\...` still
+failed: X: resolved to `\\100.103.189.15\stratrad\...`, which the connector then rejected as outside the allowed
+directories **while listing that exact UNC path as allowed** (the configured entries carry a trailing backslash).
+Passing the UNC path directly failed identically. So prod log files written for reading at `X:\logs\` are not
+reachable this way; Rakesh pastes the contents instead. Expect the same for `\\100.103.189.15\myinvestiq\`.
+**A restart fixes a missing listing, not a path the connector refuses to resolve.**
+
+## 2026-10-29 — TOML instead of YAML for the file code must never write
+`config/guardrails.toml` (ST-008) rather than `guardrails.yaml` as CLAUDE.md and DATA_MODEL.md had named it. No YAML
+library was in `requirements.txt`, so YAML meant a new dependency inside the module that gates every order. `tomllib`
+is standard library from 3.11 and **has no writer at all**, so "code and ML read the limits, never write them" is
+enforced by the parser rather than by convention — and it matches `config/strategies/*.toml`, which were already TOML
+while the docs still said `.yaml`. **When a safety rule names a file, check the file exists under that name.**
+
+## 2026-10-29 — why the held-out years stay sealed
+Rakesh asked for strategies to be judged on the whole 2014-2026 span. Two readings: judge the final verdict across the
+full span (development still confined to 2014-2023, the 2024-26 slice run once at the end), or develop across all 12
+years. The second discards the hold-out: pick the best of a dozen variants on data that includes the test years and the
+winning number is partly a description of the luck selected for, with no data left to catch it. Settled as the first —
+the full span is the **bar**, not a licence to tune across it. Looking at the held-out years and then adjusting the rule
+ends the hold-out, which is what ST-022's re-test log has to make visible. (ST-022; ST-010 decision 6 stands.)
+
+## 2026-10-29 — a test that proved the wrong rule
+`test_g05_lot_too_large` built an oversized lot by raising the quantity, which also pushed entry-to-stop risk past its
+limit — and G06 runs before the sizing rules, so the test failed naming G06. The code was right; the test was wrong. **A test
+for one rule must breach that rule only**, or it proves nothing about the rule it names. It also showed that
+first-block-wins reports one true reason out of several, which is why `evaluate_all` now exists alongside `evaluate`.
