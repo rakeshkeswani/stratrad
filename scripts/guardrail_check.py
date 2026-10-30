@@ -2,14 +2,21 @@
 # scripts/guardrail_check.py
 """ST-008: dry-run one proposed buy against the guardrails. Places no orders and writes nothing.
 
+Shows one of three outcomes (tech-debt/ST-008.md, decided 2026-10-30):
+    ALLOW  nothing failed, no limit exceeded
+    ASK    a limit would be exceeded; Rakesh may approve it -- every breach is listed
+    BLOCK  a hard rule failed (invalid order, stale or missing data, halt tier)
+
 Portfolio state comes from command-line options for now; once the service layer lands (same ST) it
-will be read from the `stratrad` database instead. Anything not supplied is unknown, and unknown
-blocks -- so a bare run reports a block, by design.
+will be read from the `stratrad` database. Anything not supplied is unknown, and unknown blocks --
+so a bare run reports a block, by design. --empty-book supplies a clean hypothetical start.
 
 Usage (laptop or prod, from the repo root):
     python -m scripts.guardrail_check --symbol INFY --strategy rakesh_top4 --qty 90 \
         --price 80 --stop 72 --sector IT --empty-book
-    python -m scripts.guardrail_check ... --open-cost 95000 --week-buys 4000 --all
+    python -m scripts.guardrail_check ... --empty-book --committed 95000 --week-buys 9500
+
+Exit code: 0 allow, 3 ask, 1 block, 2 guardrails config unreadable.
 """
 
 from __future__ import annotations
@@ -20,6 +27,8 @@ import sys
 
 from core.config import REPO_ROOT
 from execution.guardrails import (
+    ASK,
+    BLOCK,
     STAGE_BEFORE_ORDER,
     STAGE_BEFORE_PROPOSAL,
     TIER_OK,
@@ -27,12 +36,13 @@ from execution.guardrails import (
     GuardrailConfigError,
     PortfolioState,
     evaluate,
-    evaluate_all,
     load_limits,
 )
 
 LOGGER = logging.getLogger('guardrail_check')
 CONFIG_PATH = REPO_ROOT / 'config' / 'guardrails.toml'
+
+EXIT_ALLOW, EXIT_BLOCK, EXIT_CONFIG, EXIT_ASK = 0, 1, 2, 3
 
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -42,74 +52,80 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     lot.add_argument('--strategy', required=True, help='strategy name; "manual" is always refused')
     lot.add_argument('--qty', type=int, required=True)
     lot.add_argument('--price', type=float, required=True, help='limit price')
-    lot.add_argument('--stop', type=float, default=None, help='stop price (required by G06)')
-    lot.add_argument('--sector', default=None, help='unknown sector blocks on G08')
+    lot.add_argument('--stop', type=float, default=None, help='stop price (required)')
+    lot.add_argument('--sector', default=None, help='unknown sector blocks')
     lot.add_argument('--series', default='EQ')
     lot.add_argument('--flags', default='', help='comma-separated surveillance flags, e.g. ASM,GSM')
     lot.add_argument('--product', default='CNC')
     lot.add_argument('--order-type', default='LIMIT')
 
-    book = parser.add_argument_group('portfolio state (unknown blocks)')
+    book = parser.add_argument_group('portfolio state -- committed money (unknown blocks)')
     book.add_argument('--empty-book', action='store_true',
-                      help='assume no open lots, fresh data and tier ok -- the hypothetical starting point')
-    book.add_argument('--open-cost', type=float, default=None, help='cost of all open stratrad lots')
-    book.add_argument('--week-buys', type=float, default=None, help='amount already bought this week')
-    book.add_argument('--held-stock', type=float, default=None, help='open cost already in this symbol')
-    book.add_argument('--held-strategy', type=float, default=None, help='open cost already in this strategy')
-    book.add_argument('--held-sector', type=float, default=None, help='open cost already in this sector')
-    book.add_argument('--tier', default=None, help='ok / alert / no-buys / halt')
+                      help='nothing committed, fresh data, tier ok -- the hypothetical starting point')
+    book.add_argument('--committed', type=float, default=None,
+                      help='committed money across stratrad: open lots at cost + unfilled approved buys')
+    book.add_argument('--week-buys', type=float, default=None, help='new buys already committed this week')
+    book.add_argument('--held-stock', type=float, default=None, help='committed in this symbol already')
+    book.add_argument('--held-strategy', type=float, default=None, help='committed in this strategy already')
+    book.add_argument('--held-sector', type=float, default=None, help='committed in this sector already')
+    book.add_argument('--tier', default=None, help='ok / alert / no_buys / halt')
     book.add_argument('--outside-universe', action='store_true', help='treat the symbol as outside the Nifty 500')
     book.add_argument('--ca-in-days', type=int, default=None, help='trading days to the next ex-date')
     book.add_argument('--panel-age', type=int, default=None, help='price panel age in trading days')
     book.add_argument('--ca-age', type=int, default=None, help='corporate-actions age in trading days')
+    book.add_argument('--no-snapshot', action='store_true', help='no daily_snapshots row for the last trading day')
 
     parser.add_argument('--stage', choices=[STAGE_BEFORE_PROPOSAL, STAGE_BEFORE_ORDER],
                         default=STAGE_BEFORE_PROPOSAL)
-    parser.add_argument('--all', action='store_true', dest='show_all',
-                        help='list every rule that blocks, not just the first')
     return parser.parse_args(argv)
 
 
-def _build_state(args: argparse.Namespace) -> PortfolioState:
-    """Turn the options into a PortfolioState. --empty-book supplies the clean defaults."""
-    if args.empty_book:
-        defaults = {
-            'open_cost_total': 0.0, 'week_buys_amount': 0.0, 'loss_tier': TIER_OK,
-            'panel_age_trading_days': 0, 'corporate_actions_age_trading_days': 0, 'snapshot_present': True,
-        }
-    else:
-        defaults = {'snapshot_present': args.panel_age is not None}
+def _per_key(key: str | None, value: float | None, empty_book: bool) -> dict[str, float] | None:
+    """A one-entry map when the option was given; {} on an empty book; None (unknown) otherwise."""
+    if value is not None and key:
+        return {key: value}
+    return {} if empty_book else None
 
-    def _pick(name: str, value):
-        return defaults.get(name) if value is None else value
+
+def _build_state(args: argparse.Namespace) -> PortfolioState:
+    """Turn the options into a PortfolioState. --empty-book supplies clean defaults; options override them."""
+    clean = args.empty_book
+
+    def _pick(value, clean_default):
+        if value is not None:
+            return value
+        return clean_default if clean else None
+
+    snapshot = None
+    if args.no_snapshot:
+        snapshot = False
+    elif clean:
+        snapshot = True
 
     return PortfolioState(
-        open_cost_total=_pick('open_cost_total', args.open_cost),
-        cost_by_strategy={args.strategy: args.held_strategy} if args.held_strategy is not None else (
-            {} if args.empty_book else None),
-        cost_by_sector={args.sector: args.held_sector} if args.held_sector is not None and args.sector else (
-            {} if args.empty_book else None),
-        cost_by_stock={args.symbol: args.held_stock} if args.held_stock is not None else (
-            {} if args.empty_book else None),
-        week_buys_amount=_pick('week_buys_amount', args.week_buys),
-        loss_tier=_pick('loss_tier', args.tier),
+        committed_total=_pick(args.committed, 0.0),
+        committed_by_strategy=_per_key(args.strategy, args.held_strategy, clean),
+        committed_by_sector=_per_key(args.sector, args.held_sector, clean),
+        committed_by_stock=_per_key(args.symbol.upper(), args.held_stock, clean),
+        week_committed=_pick(args.week_buys, 0.0),
+        loss_tier=_pick(args.tier, TIER_OK),
         in_universe=not args.outside_universe,
         days_to_corporate_action=args.ca_in_days,
-        panel_age_trading_days=_pick('panel_age_trading_days', args.panel_age),
-        corporate_actions_age_trading_days=_pick('corporate_actions_age_trading_days', args.ca_age),
-        snapshot_present=defaults.get('snapshot_present', False),
+        panel_age_trading_days=_pick(args.panel_age, 0),
+        corporate_actions_age_trading_days=_pick(args.ca_age, 0),
+        snapshot_present=snapshot,
     )
 
 
 def main(argv: list[str] | None = None) -> int:
-    """Evaluate one hypothetical buy and print the verdict. Returns 0 when allowed, 1 when blocked."""
+    """Evaluate one hypothetical buy and print the outcome. See the module docstring for exit codes."""
     logging.basicConfig(level=logging.INFO, format='%(message)s')
     args = _parse_args(argv)
     try:
         limits = load_limits(CONFIG_PATH)
     except GuardrailConfigError as exc:
         LOGGER.error('guardrails config: %s', exc)
-        return 2
+        return EXIT_CONFIG
 
     request = BuyRequest(
         symbol=args.symbol.upper(),
@@ -129,18 +145,30 @@ def main(argv: list[str] | None = None) -> int:
                 args.stage, request.symbol, request.qty, request.limit_price, request.amount)
 
     decision = evaluate(request, state, limits, args.stage)
-    if decision.allow:
-        LOGGER.info('ALLOW  %s', decision.detail)
+
+    if decision.outcome == BLOCK:
+        LOGGER.info('BLOCK  (hard rule -- cannot be approved)')
+        for finding in decision.blocks:
+            LOGGER.info('  %s: %s', finding.rule, finding.detail)
+        if decision.asks:
+            LOGGER.info('  limits also exceeded (moot while blocked):')
+            for finding in decision.asks:
+                LOGGER.info('    %s: %s', finding.rule, finding.detail)
+        return EXIT_BLOCK
+
+    if decision.outcome == ASK:
+        LOGGER.info('ASK    over %d limit(s) -- needs Rakesh\'s approval', len(decision.asks))
+        for finding in decision.asks:
+            over = f' (over by Rs {finding.overage:,.2f})' if finding.overage is not None else ''
+            LOGGER.info('  %s: %s%s', finding.rule, finding.detail, over)
         for flag in decision.flags:
             LOGGER.info('  flag %s', flag)
-        return 0
+        return EXIT_ASK
 
-    LOGGER.info('BLOCK  %s: %s', decision.rule, decision.detail)
-    if args.show_all:
-        for other in evaluate_all(request, state, limits):
-            if other.rule != decision.rule:
-                LOGGER.info('  also %s: %s', other.rule, other.detail)
-    return 1
+    LOGGER.info('ALLOW  %s', decision.detail)
+    for flag in decision.flags:
+        LOGGER.info('  flag %s', flag)
+    return EXIT_ALLOW
 
 
 if __name__ == '__main__':
