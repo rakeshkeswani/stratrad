@@ -89,3 +89,29 @@ ends the hold-out, which is what ST-022's re-test log has to make visible. (ST-0
 limit — and G06 runs before the sizing rules, so the test failed naming G06. The code was right; the test was wrong. **A test
 for one rule must breach that rule only**, or it proves nothing about the rule it names. It also showed that
 first-block-wins reports one true reason out of several, which is why `evaluate_all` now exists alongside `evaluate`.
+
+## 2026-10-30 — correction: the X: share IS readable, through PowerShell
+The 2026-10-29 entry above said prod log files written to `X:\logs\` are not reachable and must be pasted. Wrong in
+part: the filesystem connector refuses the UNC path, but the Windows PowerShell tool runs as Rakesh with his mapped
+drives, and `Get-Content X:\logs\<file>` works. **Before concluding a path is unreachable, try every tool that could
+reach it.** (Also the same day: the laptop's `MYINVESTIQ_RO_URL` points at `localhost`, so it reaches the dev container
+only when Docker is running, never prod; and the laptop has no trusted SSH host key for rkneo50q -- Claude did not
+accept one unattended.)
+
+## 2026-10-30 — a fail-open default hiding in a convenience
+The evaluator read `days_to_corporate_action = None` as "no ex-date due". That is only true if someone actually looked:
+MyInvestIQ stores past ex-dates only, so nothing in either program knows about announced future ones, and G12 would have
+passed every buy. Found while mapping each input to its source for the service layer; fixed on 2026-11-06 with an
+explicit `upcoming_ex_dates_known` flag that blocks when false. **For every optional input, ask whether `None` means
+"checked, nothing there" or "never checked" -- and make the second one block.** Same pass found no source anywhere for
+NSE's ASM/GSM surveillance lists (now a switch, off, on the go-live checklist).
+
+## 2026-11-06 — Claude Code on rkneo50q: three surprises
+Installed as rakeshbk (2.1.318) with a Remote Control server in tmux, started at boot by a systemd **user** service
+(`~/.config/systemd/user/claude-home.service`, `loginctl enable-linger`). (1) **Trust for a home directory is never
+saved** -- "trust lasts for this run only" -- so a boot-time server started in `~` waits forever at the prompt; it now
+starts in `~/claude-work`, whose trust is saved. (2) Pasting a block that contains `tmux new` loses the lines after it
+(they wait for tmux to close): start tmux alone, then type the command inside. (3) `exec bash -l` in a pasted block
+swallows the rest of the block the same way. Remote Control sessions follow the claude.ai account, not the Linux user,
+and so do claude.ai connectors -- a second Linux user logged in as Rakesh sees his Google Drive unless connectors are
+disabled for it.
