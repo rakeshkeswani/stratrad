@@ -7,17 +7,15 @@ Last updated: 2026-11-09 (ST-008 code complete; scaffolding first; Claude Code o
 0. **Execution scaffolding first (Rakesh 2026-11-06; docs/ARCHITECTURE.md s.6):** ST-008 -> ST-009 -> ST-011, then
    daily corporate actions, then daily bhavcopy/calendar/panel + held-out run + verdict, then drill + go live.
    stratrad builds its own version of a MyInvestIQ job when it needs one; MyInvestIQ only switches and retires.
-   **Next: finish ST-008** -- `st/ST-008-guardrails` at `f9065b7`, code complete, 226 tests. Left:
-   (a) Rakesh reviews; (b) dev: start Docker (`portfolio-watch-db`), `scripts.migrate` (002), `check_database`, then
-   Claude's SQL smoke test of `DbSources` on dev -- the service's SQL has never run against a database;
-   (c) merge, prod pull, migration 002 on prod, `CALENDAR_ARCHIVE_DIR=/home/rakeshbk/myinvestiq/data/calendar` in prod
-   `.env`, `guardrail_check --live` (expected BLOCK on G12/G13 until ST-009 and the corporate-action fetch);
-   (d) MyInvestIQ-side TD recording the `stock_master` grant (+ the `.env` permission fix below); note to homelab:
-   role change, clauderk user + `/srv/clauderk-ro` bind mounts.
-   **clauderk on rkneo50q (agreed 2026-11-06, not started):** block 1 = `chmod 600` MyInvestIQ `.env` (now `664`,
-   readable by any user) after checking `myinvestiq-admin.service`'s User; `chmod 750 stratrad/data/db_backups`;
-   `adduser clauderk`; read-only bind mounts (fstab) of stratrad `data`, `logs`, MIQ `data/{bhavcopy,indices,calendar}`
-   under `/srv/clauderk-ro` (root:clauderk 750); boundary tests. Block 2 = deploy keys + clones in
+   **ST-008 Resolved 2026-11-09** (merge `5a204d9`). **Next: ST-009** (GTT stops, reconciliation, `daily_snapshots`
+   writer) -- design proposal first. Still owed from ST-008: a MyInvestIQ-side TD recording the `stock_master` grant
+   and the `.env` permission change (`664` -> `600`, 2026-11-09); a note to homelab: role change, clauderk user,
+   `/srv/clauderk-ro` bind mounts in `/etc/fstab` (and `mount -a` re-trying the mergerfs pool prints a harmless
+   "mountpoint is not empty").
+   **clauderk on rkneo50q:** block 1 done 2026-11-09 -- MyInvestIQ `.env` now `600`, `stratrad/data/db_backups` `750`,
+   user `clauderk` (uid 1001), five read-only bind mounts under `/srv/clauderk-ro` (root:clauderk 750); boundary tests
+   pass (reads the windows; write, db_backups, `/home/rakeshbk` and MIQ `.env` all refused). Check: MIQ's next 06:00
+   run and QA email still read the `.env` (they run as rakeshbk). **Remaining:** block 2 = deploy keys + clones in
    `/home/clauderk/projects`, pre-push hook refusing `main`. Block 3 = Claude login, `disableClaudeAiConnectors`, boot
    service with a `clauderk` session-name prefix, sessions started in a subfolder (home-dir trust is never saved).
    **Go-live checklist:** ST-007 rebuild drill (+ KITE_ORDER_PROXY -> MagicDNS name); strategy verdict (ST-022); daily
