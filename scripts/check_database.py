@@ -7,8 +7,8 @@ ST-012 acceptance checks on prod -- every permission is tested by ATTEMPTING the
 2. UTC: sessions of all three roles report timezone UTC.
 3. READER: stratrad_reader can SELECT every table; INSERT / UPDATE / DELETE / TRUNCATE on every table and CREATE TABLE
    fail (tested with read-only mode switched off, so only the grants can stop it).
-4. MYINVESTIQ: stratrad_ro can SELECT corporate_actions and fii_daily_flow; SELECT on every other portfolio_watch table,
-   any write on the two, and connecting to stratrad all fail. stratrad_app cannot read portfolio_watch tables.
+4. MYINVESTIQ: stratrad_ro can SELECT corporate_actions, fii_daily_flow and stock_master (ST-008, 2026-10-29); SELECT
+   on every other portfolio_watch table, any write on the three, and connecting to stratrad all fail. stratrad_app cannot read portfolio_watch tables.
 5. AUDIT LOG: stratrad_app can INSERT into audit_log; UPDATE, DELETE and TRUNCATE fail (rolled back, nothing kept).
 
 Read-only apart from the rolled-back audit_log insert. Writes LOG_DIR/check_database_<date>.log.
@@ -30,7 +30,7 @@ from scripts.migrate import discover
 logger = logging.getLogger('check_database')
 TABLES = ['strategies', 'models', 'signals', 'proposals', 'positions', 'orders', 'order_charges', 'gtt_orders',
           'position_adjustments', 'order_events', 'guardrail_events', 'daily_snapshots', 'reconciliations', 'audit_log']
-MIQ_ALLOWED = {'corporate_actions', 'fii_daily_flow'}
+MIQ_ALLOWED = {'corporate_actions', 'fii_daily_flow', 'stock_master'}   # stock_master: ST-008 sectors (interim, ST-005)
 
 
 def refused(conn: psycopg.Connection, statement) -> bool:

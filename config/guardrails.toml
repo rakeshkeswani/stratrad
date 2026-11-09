@@ -1,0 +1,57 @@
+# ST-008: the enforced copy of the trading limits. Read by execution/guardrails.py.
+#
+# EDITED ONLY BY RAKESH. Code and ML read this file; they never write it (CLAUDE.md, Trading Safety Rules).
+# Every value is in rupees unless the name says pct (fraction of 1).
+# Rule ids (G01..G14) match tech-debt/ST-008.md and the `rule` column of guardrail_events.
+
+version = 1
+updated = "2026-10-29"
+
+[capital]
+# G03 capital cap: the buy kitty, measured at the COST of currently open stratrad lots.
+# Headroom = cap - cost of open lots. A GTT exit returns that lot's cost to headroom the same day.
+# Profits never re-enter the kitty (Rakesh 2026-10-29); the cap rises only when Rakesh raises this number.
+cap = 100000
+weekly_new_buys = 10000   # G04, Monday..Sunday
+max_lot_amount = 12000    # G05, one lot
+per_stock_pct = 0.08      # G09, fraction of `cap`, across all stratrad strategies (Rs 8,000 at Rs 1,00,000)
+per_strategy = 40000      # G07
+per_sector = 25000        # G08
+
+[risk]
+# G06: (limit_price - stop_price) * qty, at the proposed entry.
+max_per_trade = 1000
+stop_required = true
+
+[tiers]
+# G11: rolling 12-month loss as a fraction of `capital.cap`, read from daily_snapshots.
+alert = 0.10         # allow, flagged
+no_new_buys = 0.15   # block buys
+halt = 0.20          # block everything
+
+[instrument]
+# G01, G02
+allowed_series = ["EQ"]
+require_universe = true              # must be in the Nifty 500 universe as-of the run date
+blocked_flags = ["SME", "ASM", "GSM"]
+# Off until a source of NSE's ASM/GSM lists exists (Rakesh 2026-11-06). Off = every check flagged
+# "surveillance-not-evaluated". Turning it on is on the go-live checklist; on with no list read = block.
+surveillance_check = false
+product = "CNC"
+order_type = "LIMIT"
+
+[corporate_actions]
+# G12: no new buy when a split, bonus or demerger ex-date falls within this many trading days.
+blackout_trading_days = 5
+
+[freshness]
+# G13: fail-closed. Ages are in trading days; a missing input blocks (never allows).
+panel_max_age_trading_days = 1
+corporate_actions_max_age_trading_days = 1
+snapshot_required = true
+# The universe review in force must be recent: reviews are semi-annual, so older than ~7 months = a missed review.
+universe_max_age_days = 214
+
+[news]
+# G14: hook only until news lands in Track F. Disabled = logged as not-evaluated, never blocks.
+enabled = false

@@ -40,22 +40,23 @@ ML and code may never change this objective.
 ## Trading Safety Rules (non-negotiable)
 
 - Every order goes through the guardrail service. No other module may call Kite order APIs.
-- `config/guardrails.yaml` is edited only by Rakesh. Code and ML read it; they never write it.
+- `config/guardrails.toml` is edited only by Rakesh. Code and ML read it; they never write it.
 - Limit orders only, CNC equity only. No F&O, MTF/margin, SME or ASM/GSM stocks.
 - Every holding must have a live GTT stop-loss. Stops only move up.
 - No new ML model or strategy setting goes live without Rakesh's approval.
 - Never log or print Kite access tokens, API secrets or Telegram tokens.
 - Any change touching `execution/` needs a dry-run test against Kite before prod.
 
-## Agreed Limits (mirror of the plan; guardrails.yaml is the enforced copy)
+## Agreed Limits (mirror of the plan; `config/guardrails.toml` is the enforced copy)
 
 | Limit | Value |
 |---|---|
-| Capital cap | Rs 1,00,000 at cost of open positions |
+| Capital cap | Rs 1,00,000 at cost of open positions; revolving (a GTT exit returns that lot's cost). Profits never re-enter the kitty; it rises only when Rakesh raises it (2026-10-29) |
 | New buys | Rs 10,000 per week |
 | Position size | ~Rs 10,000, max Rs 12,000 |
 | Risk per trade | <= Rs 1,000 entry-to-stop |
-| Per strategy / per sector | <= Rs 40,000 / <= Rs 25,000; max 10 positions |
+| Per strategy / per sector | <= Rs 40,000 / <= Rs 25,000 |
+| Per stock | <= 8% of the capital cap, across all stratrad strategies (no cap on the number of positions, 2026-10-29) |
 | Loss tiers (trailing 12m) | 10% alert, 15% no new buys, 20% full halt |
 | Universe | Nifty 500 |
 | Holding period | Positional, 1-6 months |

@@ -26,6 +26,7 @@ Present tense. Update when a module, entry point or call chain changes.
 | `python -m scripts.kite_ip_check` | ST-007: one order that cannot execute (qty 0, BUY limit Rs 1), sent through the static-IP proxy and directly: proxy -> order refusal, direct -> IP refusal | stdout |
 | `sudo bash deploy/kite-exit/setup.sh` (on the VM) | ST-007: Tailscale (skipped if joined), tinyproxy (rkneo50q only -> api.kite.trade only), ufw, unattended upgrades | the VM |
 | `python -m scripts.kite_check` | ST-006: read-only check of today's Kite session (masked user, funds, holdings count) | stdout |
+| `python -m scripts.guardrail_check --symbol S --strategy N --qty Q --price P --stop X (--live \| --empty-book ...)` | ST-008: dry-run one buy; ALLOW / ASK (every breach) / BLOCK; exit 0 / 3 / 1. `--live` reads the real book and data | nothing (stdout) |
 | `python -m pytest -q tests` | unit tests (no network) | — |
 
 ## Modules
@@ -53,6 +54,10 @@ Present tense. Update when a module, entry point or call chain changes.
 | `core/kite.py` | ST-006: `exchange_token()`, `save_session()` / `load_session()` (refuses a session issued before the last 06:00 IST: `LoginNeeded`), read-only `Client` (profile, margins, holdings; no order endpoints), `login_url()`, `mask()` |
 | `execution/kite_callback.py` | ST-006: `handle()` (path, Cloudflare Access header, status, exchange, save, audit) behind a 127.0.0.1-only `http.server`; access log without the query string |
 | `core/db.py` | `connect('app' / 'reader' / 'myinvestiq')`: psycopg 3, session timezone UTC, URLs from `.env` |
+| `core/trading_calendar.py` | ST-008: `TradingCalendar` over MyInvestIQ's holiday archive (`CALENDAR_ARCHIVE_DIR`, read-only): `is_trading_day()`, `sessions_between(after, before)` (a data age), `previous_trading_day()`; an uncovered year is None, never a guess |
+| `execution/guardrails.py` | ST-008: pure rules, no I/O. `load_limits()` (`config/guardrails.toml`, raises if absent), `evaluate()` -> `Decision` ALLOW / ASK / BLOCK with every `Finding`; hard rules G01/G02/G06a/G11 halt/G12 unknown/G13/G14 block, soft limits ask |
+| `execution/guardrail_service.py` | ST-008: the only door to an order. `check_before_proposal(request, run_picks)`, `check_before_order(proposal_id, approval_id)` (G00 = proposal not approved); `gather_state()` (committed money, tier, universe, sector, data ages); `approval_covers()` / `approval_details()` (the `audit_log` approval format ST-011 writes); `DbSources` (stratrad_app + stratrad_ro + panel + universe); one `guardrail_events` row per check |
+| `database/migrations/002_guardrail_ask.sql` | ST-008: `guardrail_events.decision` gains `ask`; `approval_id` -> `audit_log` |
 | `database/migrations/001_initial_schema.sql` | the 14 tables of docs/DATA_MODEL.md s.4; `audit_log` append-only trigger; strategy `manual` seeded; SELECT for `stratrad_reader` |
 | `database/setup_roles.sql` | superuser, once: the three roles, database `stratrad`, `stratrad_ro` grants on `portfolio_watch` |
 | `core/demergers.py` | `feed_records()` (EQ demerger/scheme records), `candidates()` (factor = prev close / ex-day close; falls > 5% applied), `merge_reviewed()`, `load_demergers()` (applied rows as actions, kind `demerger`) |
