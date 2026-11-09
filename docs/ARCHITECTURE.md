@@ -35,6 +35,11 @@ Still open in ST-021 (section 8): the MyInvestIQ brief, the Track F issues, and 
 
 > **Placeholder.** One-paragraph maps now; each program completes its own (CODE_MAP / SYSTEM_FLOW level) as part of
 > the roll-out plan.
+>
+> **Functional map (2026-10-31):** every job and feature of both programs side by side -- schedule, status, call,
+> TD/ST reference and where it moves -- is the artifact "stratrad x MyInvestIQ Map"
+> (https://claude.ai/artifact/TZXE3tjgfLuUY6x27duxjr), built from MyInvestIQ's PRODUCT s.11 / SYSTEM_FLOW / CODE_MAP
+> and stratrad's CODE_MAP / CONFIG / TECH_DEBT. It is a snapshot: refresh it when a job moves.
 
 **stratrad today** (repo `rakeshkeswani/stratrad`, prod `/home/rakeshbk/stratrad`, database `stratrad`):
 - Data: NSE bhavcopy legacy 2014-Jul 2024 + UDiFF gap (ST-002, one-off), adjusted price panel with symbol-change
@@ -124,6 +129,20 @@ They gate (a) the 2024-26 held-out run, (b) the strategy verdict, since a strate
 span (ST-022), and (c) go-live, because ST-008's G13 blocks on a stale panel or stale corporate actions by design.
 The rest of Track F (FII/DII, macro, news, market feeds, earnings pulls, stock master, read access for MIQ) is
 genuinely deferrable.
+
+**How takeovers happen (Rakesh, 2026-11-06):** stratrad builds its own version of a MyInvestIQ job when a stratrad
+feature reaches the point of needing it -- not by briefing MyInvestIQ to change its job first. MyInvestIQ's only part is
+the last two steps of principle 2 (switch to reading stratrad's output, retire its own job), recorded as a TD- on its
+side. So the 2026-10-30 brief to widen MyInvestIQ's TD-208 official-sector fetch to the Nifty 500 is **shelved**;
+stratrad takes that fetch over itself when it reaches ST-005.
+
+**Order (Rakesh, 2026-11-06): execution scaffolding first.**
+1. ST-008 guardrails (code complete 2026-11-06).
+2. ST-009 GTT stops + reconciliation (also writes `daily_snapshots`), then ST-011 Telegram approvals.
+3. Daily corporate actions + demergers in stratrad -- MyInvestIQ reads them and TD-251 closes as moved. Must keep
+   announced FUTURE ex-dates (ST-008's G12 blocks until it does).
+4. Daily bhavcopy + calendar + panel in stratrad, then the 2024-26 held-out run and the verdict (ST-022).
+5. ST-007 rebuild drill, surveillance (ASM/GSM) source, then go live.
 
 ## 7. Open questions
 

@@ -1,23 +1,29 @@
 # TODO.md — open items and resume point
 
 Read at session start (after `TECH_DEBT.md` and the tail of `SESSION_LOG.md`). Tick/remove as done.
-Last updated: 2026-10-29 (Track S prioritised; ST-021 approved; ST-008 rules built; ST-022 raised).
+Last updated: 2026-11-09 (ST-008 code complete; scaffolding first; Claude Code on rkneo50q; clauderk planned).
 
 ## Resume here (new conversation)
-0. **Track S first (Rakesh 2026-10-29; docs/ARCHITECTURE.md s.6).** Track F items are taken up when Track S needs them.
-   **Next: finish ST-008** -- branch `st/ST-008-guardrails` is 4 commits ahead of main and incomplete. Left on it:
-   (a) the service layer (`execution/guardrail_service.py`: gather state, write one `guardrail_events` row per check)
-   -- **blocked on the `stock_master` schema**, which Rakesh pastes in chat (the X: share is unreadable to Claude,
-   see LEARNINGS 2026-10-29); (b) DATA_MODEL.md s.1/s.4/s.6 still say `stratrad_ro` has SELECT on `corporate_actions`
-   and `fii_daily_flow` **only** -- update once the grant is confirmed from the `\dp` output; (c) the MyInvestIQ-side
-   TD- issue recording the grant, and the note to homelab (role change -> backup chain).
-   Then ST-009 GTT stops -> ST-011 Telegram -> verdict -> go live.
-   **Gates that are not deferrable** (Track F, on the critical path): daily bhavcopy + calendar, daily corporate
-   actions + demergers, daily panel + freshness check. They gate the held-out run, the verdict and go-live (G13).
-   None has an ST number yet -- raising them is one of ST-021's three leftovers.
-   **Go-live checklist so far:** ST-007 rebuild drill (+ KITE_ORDER_PROXY -> MagicDNS name); strategy verdict (ST-022);
-   the three Track F gates above. Test 1 paper-profits question: closed 2026-10-29.
-   Also open: ST-022 strategy research loop (design to be proposed).
+0. **Execution scaffolding first (Rakesh 2026-11-06; docs/ARCHITECTURE.md s.6):** ST-008 -> ST-009 -> ST-011, then
+   daily corporate actions, then daily bhavcopy/calendar/panel + held-out run + verdict, then drill + go live.
+   stratrad builds its own version of a MyInvestIQ job when it needs one; MyInvestIQ only switches and retires.
+   **Next: finish ST-008** -- `st/ST-008-guardrails` at `f9065b7`, code complete, 226 tests. Left:
+   (a) Rakesh reviews; (b) dev: start Docker (`portfolio-watch-db`), `scripts.migrate` (002), `check_database`, then
+   Claude's SQL smoke test of `DbSources` on dev -- the service's SQL has never run against a database;
+   (c) merge, prod pull, migration 002 on prod, `CALENDAR_ARCHIVE_DIR=/home/rakeshbk/myinvestiq/data/calendar` in prod
+   `.env`, `guardrail_check --live` (expected BLOCK on G12/G13 until ST-009 and the corporate-action fetch);
+   (d) MyInvestIQ-side TD recording the `stock_master` grant (+ the `.env` permission fix below); note to homelab:
+   role change, clauderk user + `/srv/clauderk-ro` bind mounts.
+   **clauderk on rkneo50q (agreed 2026-11-06, not started):** block 1 = `chmod 600` MyInvestIQ `.env` (now `664`,
+   readable by any user) after checking `myinvestiq-admin.service`'s User; `chmod 750 stratrad/data/db_backups`;
+   `adduser clauderk`; read-only bind mounts (fstab) of stratrad `data`, `logs`, MIQ `data/{bhavcopy,indices,calendar}`
+   under `/srv/clauderk-ro` (root:clauderk 750); boundary tests. Block 2 = deploy keys + clones in
+   `/home/clauderk/projects`, pre-push hook refusing `main`. Block 3 = Claude login, `disableClaudeAiConnectors`, boot
+   service with a `clauderk` session-name prefix, sessions started in a subfolder (home-dir trust is never saved).
+   **Go-live checklist:** ST-007 rebuild drill (+ KITE_ORDER_PROXY -> MagicDNS name); strategy verdict (ST-022); daily
+   corporate actions keeping FUTURE ex-dates (lifts G12); daily panel (lifts G13); a source of NSE ASM/GSM lists and
+   `surveillance_check = true`; ST-009 writing `daily_snapshots`.
+   Also open: ST-022 strategy research loop (design to be proposed). Functional map artifact: ARCHITECTURE s.3.
 1. **Strategy verdict (Rakesh):** review document "stratrad strategy review: ST-010 backtests 2014-2023" (Claude
    Docs artifact, numbers after ST-019) holds the cards, comparison, Claude's recommendations and the card change list.
    Decided 2026-10-29 (recorded in ST-022): Test 1 keeps open lots at their own buy price (paper profits counted in

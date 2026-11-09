@@ -147,3 +147,36 @@
   before building on it.
 - Status at close: main `91bd9ef`; `st/ST-008-guardrails` 4 commits ahead of main, unmerged and incomplete.
   Resume: `TODO.md` item 0.
+
+## 2026-10-30 to 2026-11-09 — ST-008 code complete; functional map; scaffolding first; Claude Code on rkneo50q
+- **ST-008 decisions (Rakesh):** all limits are soft -- "Rs 1 lakh isn't a hard limit" -- so a breach ASKs Rakesh
+  instead of blocking; validity rules (G01 instrument, G02 order shape, G06 stop present, G13 data freshness, G14) and
+  the **halt** loss tier stay hard. Committed money counts open lots + live entry orders + approved proposals + earlier
+  picks of the same run (without it the system never notices a limit being crossed, so it could never ask). One ask
+  lists every breach and shows overage already approved; no ceiling. Tier names fixed to the schema (`no_buys`).
+  Migration 002: `guardrail_events.decision` gains `ask`, plus `approval_id`. Commit `4345d1e`.
+- **Sectors:** `stock_master` schema read (via PowerShell on X:) and the grant confirmed (`stratrad_ro=r`). MyInvestIQ's
+  TD-208 holds the official India Industry Classification; `our_sector` (13 + Other) chosen as the interim, read
+  through `stratrad_ro`. A brief to widen TD-208's fetch to the Nifty 500 was written, then **shelved** (below).
+- **Functional map** of both programs published as an artifact (linked from ARCHITECTURE s.3). Found: nothing in either
+  program has fetched corporate actions since 2026-08-28 (MyInvestIQ TD-251); stratrad has no scheduled job at all;
+  MyInvestIQ runs one n8n workflow with five triggers (earnings and QA chained after 06:00, not separate).
+- **Direction (Rakesh, 2026-11-06):** stratrad builds its own version of a MyInvestIQ job when a stratrad feature needs
+  it; MyInvestIQ only switches and retires (ARCHITECTURE s.6). Order: execution scaffolding first (ST-008 -> ST-009 ->
+  ST-011), corporate actions and the other data takeovers after.
+- **ST-008 service layer (2026-11-06, commit `f9065b7` on 2026-11-09):** `execution/guardrail_service.py`
+  (`check_before_proposal`, `check_before_order` with G00 = not approved, approvals via `audit_log`),
+  `core/trading_calendar.py` (MyInvestIQ's holiday archive, read-only, `CALENDAR_ARCHIVE_DIR`), G12 fail-closed on
+  unknown future ex-dates, surveillance switch (off), universe-age check, `guardrail_check --live`, and a test that fails
+  if any module names a Kite order/GTT endpoint without the service (one reviewed exception: `kite_ip_check.py`).
+  226 tests. SQL not yet run against a database.
+- **Claude Code on rkneo50q (Rakesh, 2026-11-06):** installed as rakeshbk; Remote Control server "rkneo home" in tmux,
+  started at boot by a systemd user service, sessions in `~/claude-work`; reboot test passed; Require trusted devices on.
+  Plan agreed: a second user **clauderk** for stratrad/MyInvestIQ agentic work -- its own clones, read-only bind mounts
+  of specific data folders under `/srv/clauderk-ro`, no `.env`/DB/Kite secrets, no claude.ai connectors, no pushes to
+  `main`. Not created yet. Found on the way: **MyInvestIQ's prod `.env` is `664`** (any user can read it; only the home
+  folder's `750` protects it) -- fix with clauderk's block 1, and record in a MyInvestIQ TD.
+- Slips: the evaluator's `None` = "no ex-date due" was fail-open (LEARNINGS); a G05 test again breached two rules
+  (weekly cap); X: was readable through PowerShell all along (LEARNINGS correction).
+- Status at close (2026-11-09): main `a229442`; `st/ST-008-guardrails` at `f9065b7`, code complete, awaiting review
+  and dev/prod migration. Resume: `TODO.md` item 0.
