@@ -4,8 +4,8 @@
 ST-012 -- connections to PostgreSQL (psycopg 3).
 
 Three connections, each from its own URL in .env (core/config.py): 'app' (stratrad_app, owner of database stratrad),
-'reader' (stratrad_reader, read-only), 'myinvestiq' (stratrad_ro on MyInvestIQ's portfolio_watch: corporate_actions and
-fii_daily_flow only). Every session runs in UTC (the server's default is IST), so stored and compared times are
+'reader' (stratrad_reader, read-only), 'myinvestiq' (stratrad_ro on MyInvestIQ's portfolio_watch: SELECT on corporate_actions,
+fii_daily_flow and, since 2026-10-29 for ST-008, stock_master). Every session runs in UTC (the server's default is IST), so stored and compared times are
 unambiguous; show them in IST at the edges.
 """
 

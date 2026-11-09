@@ -88,10 +88,13 @@ class PortfolioState:
     week_committed: float | None = None          # new buys committed this week (Mon-Sun, IST)
     loss_tier: str | None = None
     in_universe: bool | None = None
+    universe_age_days: int | None = None         # calendar days since the universe review in force took effect
+    upcoming_ex_dates_known: bool | None = None  # True only when a source of announced FUTURE ex-dates was read
     days_to_corporate_action: int | None = None  # trading days to the next split/bonus/demerger ex-date; None = none due
     panel_age_trading_days: int | None = None
     corporate_actions_age_trading_days: int | None = None
     snapshot_present: bool | None = None
+    surveillance_checked: bool = False
     news_checked: bool = False
 
 
@@ -197,6 +200,12 @@ def _check_freshness(request: BuyRequest, state: PortfolioState, limits: dict[st
         return [_block('G13', f'corporate actions are {state.corporate_actions_age_trading_days} trading days old')]
     if fresh['snapshot_required'] and not state.snapshot_present:
         return [_block('G13', 'no daily_snapshots row for the last trading day')]
+    if limits['instrument']['require_universe']:
+        if state.universe_age_days is None:
+            return [_block('G13', 'universe review in force unknown')]
+        if state.universe_age_days > fresh['universe_max_age_days']:
+            return [_block('G13', f'universe review in force took effect {state.universe_age_days} days ago '
+                                  f'(a semi-annual review was missed)')]
     return []
 
 
@@ -222,6 +231,8 @@ def _check_instrument(request: BuyRequest, state: PortfolioState, limits: dict[s
         return [_block('G01', 'instrument series unknown')]
     if request.series not in instrument['allowed_series']:
         return [_block('G01', f'series {request.series} is not tradable (allowed: {instrument["allowed_series"]})')]
+    if instrument['surveillance_check'] and not state.surveillance_checked:
+        return [_block('G01', 'surveillance check enabled but the ASM/GSM lists were not read')]
     flagged = sorted(set(request.flags) & set(instrument['blocked_flags']))
     if flagged:
         return [_block('G01', f'{request.symbol} carries surveillance flags: {", ".join(flagged)}')]
@@ -256,7 +267,13 @@ def _check_news(request: BuyRequest, state: PortfolioState, limits: dict[str, An
 # ---- soft rules: limits, subject to Rakesh's approval ----------------------------------------------------------------
 
 def _check_corporate_action(request: BuyRequest, state: PortfolioState, limits: dict[str, Any]) -> list[Finding]:
-    """G12 (soft): a split/bonus/demerger ex-date within the window (ST-019: the gap is not a loss)."""
+    """G12 (soft): a split/bonus/demerger ex-date within the window (ST-019: the gap is not a loss).
+
+    Fail-closed (2026-11-06): with no source of announced future ex-dates, "none known" is not "none due",
+    so it blocks. MyInvestIQ stores only past ex-dates; stratrad's own corporate-action fetch is to keep them.
+    """
+    if not state.upcoming_ex_dates_known:
+        return [_block('G12', 'upcoming ex-dates unknown (no source of announced corporate actions)')]
     window = limits['corporate_actions']['blackout_trading_days']
     days = state.days_to_corporate_action
     if days is not None and 0 <= days <= window:
@@ -393,6 +410,8 @@ def evaluate(request: BuyRequest, state: PortfolioState, limits: dict[str, Any],
     flags: list[str] = []
     if state.loss_tier == TIER_ALERT:
         flags.append('G11:alert')
+    if not limits['instrument']['surveillance_check']:
+        flags.append('G01:surveillance-not-evaluated')
     if not limits['news']['enabled']:
         flags.append('G14:not-evaluated')
 

@@ -39,8 +39,10 @@ read-only under its own TD.
 |---|---|---|
 | UDiFF bhavcopy (NSE+BSE), daily 18:00 job | `/home/rakeshbk/myinvestiq/data/bhavcopy/` | prices from 2025-08-28 (+5 probe dates in 2024) |
 | Index closes | `/home/rakeshbk/myinvestiq/data/indices/` | breadth, benchmarks (later) |
-| `corporate_actions` table | DB `portfolio_watch` | ongoing splits/bonuses (ST-003; needs read-only role, ST-012) |
+| `corporate_actions` table | DB `portfolio_watch` | ongoing splits/bonuses (ST-003; needs read-only role, ST-012); ST-008 reads `max(fetched_at)` for G13 |
 | `fii_daily_flow` table | DB `portfolio_watch` | regime model (later) |
+| `stock_master` table (`nse_symbol`, `our_sector`, `is_active`, `last_updated`) | DB `portfolio_watch` | ST-008 sector of a new symbol (interim until ST-005; grant 2026-10-29) |
+| Trading-holiday calendar `nse_cm_holidays_<year>.json` | `/home/rakeshbk/myinvestiq/data/calendar/` | ST-008 data ages in trading days (`core/trading_calendar.py`) |
 
 ## Windows shares
 
@@ -63,6 +65,7 @@ Fetchers refuse to write to a `//host/...` path, so Windows can never write into
 | `UDIFF_GAP_DIR` | none | `/home/rakeshbk/stratrad/data/bhavcopy_udiff` | `core/udiff_bhavcopy_reader.py` |
 | `LEGACY_BHAVCOPY_DIR` | `<repo>/data/bhavcopy_legacy` | default (may be set explicitly) | legacy reader + fetcher |
 | `INDEX_ARCHIVE_DIR` | none | (not yet used) | — |
+| `CALENDAR_ARCHIVE_DIR` | none — unset means every data age is unknown, so the guardrails block | `/home/rakeshbk/myinvestiq/data/calendar` | `core/trading_calendar.py` (ST-008) |
 | `LOG_DIR` | `<repo>/logs` | default | fetch + validate scripts |
 | `CORPORATE_ACTIONS_DIR` | `<repo>/data/corporate_actions` | default | CA fetcher, `core/corporate_actions.py`, validator |
 | `SYMBOL_CHANGES_DIR` | `<repo>/data/symbol_changes` | default | `fetch_symbol_changes`, `core/symbol_changes.py` |
@@ -72,7 +75,7 @@ Fetchers refuse to write to a `//host/...` path, so Windows can never write into
 | `BACKTESTS_DIR` | `<repo>/data/backtests` | default | `backtest/run.py` (writes; refuses a `//` share), `report_card`, `validate_backtest` |
 | `STRATRAD_DB_URL` | — (required for DB scripts) | `postgresql://stratrad_app:<pw>@localhost:5432/stratrad` | `core/db.py` `connect('app')`, `migrate`, `check_database` |
 | `STRATRAD_READER_URL` | — | `postgresql://stratrad_reader:<pw>@localhost:5432/stratrad` | `connect('reader')`, `check_database` |
-| `MYINVESTIQ_RO_URL` | — | `postgresql://stratrad_ro:<pw>@localhost:5432/portfolio_watch` | `connect('myinvestiq')` (ST-020), `check_database` |
+| `MYINVESTIQ_RO_URL` | — | `postgresql://stratrad_ro:<pw>@localhost:5432/portfolio_watch` | `connect('myinvestiq')` (ST-008 guardrail service, ST-020), `check_database` |
 | `KITE_API_KEY`, `KITE_API_SECRET` | — (prod only) | stratrad's own Kite Connect app (Personal, free) | `core/kite.py`; never printed or logged |
 | `KITE_SESSION_FILE` | `~/.stratrad/kite_session.json` | default | the day's session (mode 600, folder 700; outside the repo and the backup mirror; expires 06:00 IST) |
 | `KITE_CALLBACK_PORT` | `8765` | default | `execution/kite_callback.py` (127.0.0.1 only) |
@@ -96,7 +99,7 @@ PostgreSQL 16 on rkneo50q (localhost:5432, server timezone IST), shared with MyI
 | | |
 |---|---|
 | Database | `stratrad`, owner `stratrad_app` (ST-012); schema only through `database/migrations/NNN_*.sql` + `python -m scripts.migrate` |
-| Roles | `stratrad_app` (owner, live system, migrations); `stratrad_reader` (SELECT only); `stratrad_ro` on `portfolio_watch` (SELECT on `corporate_actions`, `fii_daily_flow` only). All sessions UTC. Created by `database/setup_roles.sql` (superuser, once); passwords set with `\password`, kept only in prod `.env` |
+| Roles | `stratrad_app` (owner, live system, migrations); `stratrad_reader` (SELECT only); `stratrad_ro` on `portfolio_watch` (SELECT on `corporate_actions`, `fii_daily_flow`, and `stock_master` since 2026-10-29 for ST-008; granted by hand as `portfolio_rk`, not in `setup_roles.sql`). All sessions UTC. Created by `database/setup_roles.sql` (superuser, once); passwords set with `\password`, kept only in prod `.env` |
 | Checks | `python -m scripts.check_database` (every permission tested by attempting it) |
 | Dev (laptop) | same layout inside MyInvestIQ's dev Docker container `portfolio-watch-db` (postgres:16, localhost:5432, superuser `portfolio_user`; timezone UTC): database `stratrad` + the same three roles, created with `database/setup_roles.sql` via `docker exec -i portfolio-watch-db psql -U portfolio_user -d postgres`; dev-only passwords in the laptop `.env`. Migrations run on dev first, then prod. Holds operational test data only; research data stays the single prod copy, read over the share |
 | MyInvestIQ | `portfolio_watch`, user `portfolio_rk`; always `psql -h localhost` (peer auth fails on the Unix socket) |

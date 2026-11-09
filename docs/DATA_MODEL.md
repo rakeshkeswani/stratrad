@@ -21,7 +21,8 @@ versioned artifacts (a strategy config, a model version, a universe as-of date).
 **Placement (ST-012):** a new database `stratrad` on the existing PostgreSQL 16 server (rkneo50q:5432) next to
 MyInvestIQ's `portfolio_watch` — separate databases, so neither can touch the other's tables. Roles: `stratrad_app`
 (owner, the live system), `stratrad_reader` (read-only reporting). MyInvestIQ grants a read-only role SELECT on
-`corporate_actions` and `fii_daily_flow` only; stratrad reads them over a second connection. Server maintenance only
+`corporate_actions`, `fii_daily_flow` and (since 2026-10-29, ST-008) `stock_master`; stratrad reads them over a
+second connection. Server maintenance only
 outside market hours (both projects share the server). Size: ~8 MB empty, < 10 MB per year of live data.
 
 ## 2. Identifiers (used in both stores)
@@ -88,7 +89,7 @@ updates; raw broker payloads kept as `jsonb`; schema changes only through number
 | `positions` | holding lot (stratrad strategies and `manual`) | symbol, isin, instrument_token, sector, strategy_id, entry date/price/qty, exit date/price/qty, exit_reason (stop / trail / manual / rule), status, realised_pnl (net of charges) | ST-009 |
 | `position_adjustments` | corporate action on a held lot | position_id, ex_date, action_type, factor, qty before/after, entry price before/after, stop before/after | ST-009 |
 | `order_events` | status change | order_id / gtt_id / proposal_id, from_status, to_status, at, detail (jsonb) | ST-006+ |
-| `guardrail_events` | guardrail check | stage (before_proposal / before_order), rule, decision (allow / block), limits snapshot (jsonb), context (jsonb) | ST-008 |
+| `guardrail_events` | guardrail check | stage (before_proposal / before_order), rule (comma-separated rule ids behind the outcome, `OK` on a clean allow), decision (allow / ask / block, migration 002), approval_id (Rakesh's approval in `audit_log`, required on an over-limit allow), limits snapshot (jsonb), context (jsonb: request, state, findings, flags, what was read) | ST-008 |
 | `daily_snapshots` | trading day | invested_at_cost, market_value, realised / unrealised pnl (net of charges), rolling 12-month loss %, tier (ok / alert / no-buys / halt), exposure by strategy and sector (jsonb) | ST-008/009 |
 | `reconciliations` | day x difference | Kite holdings / GTTs vs `positions` / `gtt_orders`; monthly: `order_charges` vs the official contract note | ST-009 |
 | `audit_log` | action | actor (system / Rakesh), action, details (jsonb); append-only | all |
@@ -118,7 +119,8 @@ loss are net of charges.
 Corporate actions on held lots: Kite adjusts the holding quantity; stratrad records a `position_adjustments` row
 (quantity, entry price and stop scaled by the factor) and re-places the GTT. Reconciliation flags any mismatch.
 
-Read-only from MyInvestIQ (`portfolio_watch`): `corporate_actions`, `fii_daily_flow` (ST-012).
+Read-only from MyInvestIQ (`portfolio_watch`): `corporate_actions`, `fii_daily_flow` (ST-012); `stock_master` for the
+sector of a new symbol (ST-008, interim until ST-005 -- a deviation from s.6's "sectors from files", on purpose).
 
 ## 5. Flow
 
@@ -145,7 +147,8 @@ tier change).
   Beyond the conventions: Kite's `avg_price` and per-order charge components keep 4 decimals, adjustment factors 8;
   `audit_log` is append-only by trigger (owner included).
 - Grants: `stratrad_app` owns everything; `stratrad_reader` SELECT on all tables (default privileges cover later
-  tables); `stratrad_ro` SELECT on `portfolio_watch.corporate_actions` and `fii_daily_flow` only.
+  tables); `stratrad_ro` SELECT on `portfolio_watch.corporate_actions` and `fii_daily_flow` (ST-012), and
+  `stock_master` (2026-10-29, ST-008).
 - Raw broker payloads (`jsonb`) are kept indefinitely (< 10 MB a year).
 - Research outputs the live run needs (universe, sectors, features) are read from files, never loaded into the
   database.

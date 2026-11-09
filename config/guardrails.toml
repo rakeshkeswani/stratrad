@@ -34,6 +34,9 @@ halt = 0.20          # block everything
 allowed_series = ["EQ"]
 require_universe = true              # must be in the Nifty 500 universe as-of the run date
 blocked_flags = ["SME", "ASM", "GSM"]
+# Off until a source of NSE's ASM/GSM lists exists (Rakesh 2026-11-06). Off = every check flagged
+# "surveillance-not-evaluated". Turning it on is on the go-live checklist; on with no list read = block.
+surveillance_check = false
 product = "CNC"
 order_type = "LIMIT"
 
@@ -46,6 +49,8 @@ blackout_trading_days = 5
 panel_max_age_trading_days = 1
 corporate_actions_max_age_trading_days = 1
 snapshot_required = true
+# The universe review in force must be recent: reviews are semi-annual, so older than ~7 months = a missed review.
+universe_max_age_days = 214
 
 [news]
 # G14: hook only until news lands in Track F. Disabled = logged as not-evaluated, never blocks.

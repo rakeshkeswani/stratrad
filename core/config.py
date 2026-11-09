@@ -29,6 +29,9 @@ LEGACY_BHAVCOPY_DIR = _dir_from_env('LEGACY_BHAVCOPY_DIR', REPO_ROOT / 'data' / 
 # this project must never silently read or create a local copy.
 BHAVCOPY_ARCHIVE_DIR = _dir_from_env('BHAVCOPY_ARCHIVE_DIR')
 INDEX_ARCHIVE_DIR = _dir_from_env('INDEX_ARCHIVE_DIR')
+# ST-008: MyInvestIQ's NSE trading-holiday calendar (nse_cm_holidays_<year>.json), READ-ONLY, until stratrad owns its
+# own (Track F). No default, same reason as above. Prod: /home/rakeshbk/myinvestiq/data/calendar
+CALENDAR_ARCHIVE_DIR = _dir_from_env('CALENDAR_ARCHIVE_DIR')
 
 # This project's own UDiFF files for dates MyInvestIQ's archive does not hold (2024-01-03 to
 # 2025-08-27; docs/CONFIG.md "one-off operations"). Read-only. Prod: default (<repo>/data/bhavcopy_udiff).

@@ -7,14 +7,16 @@ Shows one of three outcomes (tech-debt/ST-008.md, decided 2026-10-30):
     ASK    a limit would be exceeded; Rakesh may approve it -- every breach is listed
     BLOCK  a hard rule failed (invalid order, stale or missing data, halt tier)
 
-Portfolio state comes from command-line options for now; once the service layer lands (same ST) it
-will be read from the `stratrad` database. Anything not supplied is unknown, and unknown blocks --
-so a bare run reports a block, by design. --empty-book supplies a clean hypothetical start.
+Two ways to supply portfolio state:
+    --live        read the real book and data through execution.guardrail_service (prod), writing nothing
+    options       a hypothetical book; --empty-book is a clean start, other options override it
+Anything not supplied is unknown, and unknown blocks -- so a bare run reports a block, by design.
 
-Usage (laptop or prod, from the repo root):
+Usage (from the repo root):
     python -m scripts.guardrail_check --symbol INFY --strategy rakesh_top4 --qty 90 \
         --price 80 --stop 72 --sector IT --empty-book
     python -m scripts.guardrail_check ... --empty-book --committed 95000 --week-buys 9500
+    python -m scripts.guardrail_check --symbol INFY --strategy rakesh_top4 --qty 90 --price 80 --stop 72 --live
 
 Exit code: 0 allow, 3 ask, 1 block, 2 guardrails config unreadable.
 """
@@ -74,6 +76,8 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     book.add_argument('--panel-age', type=int, default=None, help='price panel age in trading days')
     book.add_argument('--ca-age', type=int, default=None, help='corporate-actions age in trading days')
     book.add_argument('--no-snapshot', action='store_true', help='no daily_snapshots row for the last trading day')
+    book.add_argument('--live', action='store_true',
+                      help='read the real book and data (prod); the options above and --sector are ignored')
 
     parser.add_argument('--stage', choices=[STAGE_BEFORE_PROPOSAL, STAGE_BEFORE_ORDER],
                         default=STAGE_BEFORE_PROPOSAL)
@@ -103,6 +107,8 @@ def _build_state(args: argparse.Namespace) -> PortfolioState:
         snapshot = True
 
     return PortfolioState(
+        universe_age_days=0 if clean else None,
+        upcoming_ex_dates_known=True if (clean or args.ca_in_days is not None) else None,
         committed_total=_pick(args.committed, 0.0),
         committed_by_strategy=_per_key(args.strategy, args.held_strategy, clean),
         committed_by_sector=_per_key(args.sector, args.held_sector, clean),
@@ -115,6 +121,21 @@ def _build_state(args: argparse.Namespace) -> PortfolioState:
         corporate_actions_age_trading_days=_pick(args.ca_age, 0),
         snapshot_present=snapshot,
     )
+
+
+def _live(request: BuyRequest, limits: dict, stage: str):
+    """Evaluate against the real book and data, writing no guardrail_events row. Returns (decision, request)."""
+    import dataclasses
+
+    from core.trading_calendar import TradingCalendar
+    from execution.guardrail_service import DbSources, gather_state, today_ist
+
+    with DbSources() as sources:
+        request = dataclasses.replace(request, sector=sources.sector_of(request.symbol))
+        state, request, notes = gather_state(request, sources=sources, calendar=TradingCalendar(), on=today_ist())
+    for key, value in notes.items():
+        LOGGER.info('  read %s: %s', key, value)
+    return evaluate(request, state, limits, stage), request
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -139,12 +160,15 @@ def main(argv: list[str] | None = None) -> int:
         product=args.product,
         order_type=args.order_type,
     )
-    state = _build_state(args)
+    if args.live:
+        decision, request = _live(request, limits, args.stage)
+    else:
+        state = _build_state(args)
+        decision = evaluate(request, state, limits, args.stage)
 
-    LOGGER.info('%s: %s x %d @ Rs %.2f = Rs %.2f',
-                args.stage, request.symbol, request.qty, request.limit_price, request.amount)
-
-    decision = evaluate(request, state, limits, args.stage)
+    LOGGER.info('%s: %s x %d @ Rs %.2f = Rs %.2f%s',
+                args.stage, request.symbol, request.qty, request.limit_price, request.amount,
+                ' (live book)' if args.live else '')
 
     if decision.outcome == BLOCK:
         LOGGER.info('BLOCK  (hard rule -- cannot be approved)')

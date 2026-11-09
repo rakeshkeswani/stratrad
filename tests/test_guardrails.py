@@ -64,6 +64,8 @@ def state_ok() -> PortfolioState:
         week_committed=0.0,
         loss_tier=TIER_OK,
         in_universe=True,
+        universe_age_days=30,
+        upcoming_ex_dates_known=True,
         days_to_corporate_action=None,
         panel_age_trading_days=0,
         corporate_actions_age_trading_days=0,
@@ -160,6 +162,29 @@ def test_g13_stale_or_missing_data(request_ok, state_ok, limits):
     _blocked_by(request_ok, state_ok, limits, 'G13', state={'corporate_actions_age_trading_days': None})
     _blocked_by(request_ok, state_ok, limits, 'G13', state={'corporate_actions_age_trading_days': 9})
     _blocked_by(request_ok, state_ok, limits, 'G13', state={'snapshot_present': False})
+
+
+def test_g13_universe_unknown_or_stale(request_ok, state_ok, limits):
+    _blocked_by(request_ok, state_ok, limits, 'G13', state={'universe_age_days': None})
+    _blocked_by(request_ok, state_ok, limits, 'G13', state={'universe_age_days': 400})
+    assert _outcome(request_ok, state_ok, limits, state={'universe_age_days': 200}).allow
+
+
+def test_g12_unknown_upcoming_ex_dates_block(request_ok, state_ok, limits):
+    """Fail-closed (2026-11-06): no source of future ex-dates is not the same as none due."""
+    _blocked_by(request_ok, state_ok, limits, 'G12', state={'upcoming_ex_dates_known': False})
+    _blocked_by(request_ok, state_ok, limits, 'G12', state={'upcoming_ex_dates_known': None})
+
+
+def test_g01_surveillance_switch(request_ok, state_ok, limits):
+    """Off (shipped): flagged, not blocked. On with no list read: block. On and read: allowed."""
+    decision = _outcome(request_ok, state_ok, limits)
+    assert decision.allow and 'G01:surveillance-not-evaluated' in decision.flags
+    on = {**limits, 'instrument': {**limits['instrument'], 'surveillance_check': True}}
+    blocked = evaluate(request_ok, state_ok, on, STAGE_BEFORE_PROPOSAL)
+    assert blocked.outcome == BLOCK and blocked.rule == 'G01'
+    read = dataclasses.replace(state_ok, surveillance_checked=True)
+    assert evaluate(request_ok, read, on, STAGE_BEFORE_PROPOSAL).allow
 
 
 def test_g13_is_named_first_even_when_limits_are_also_exceeded(request_ok, state_ok, limits):
@@ -279,6 +304,7 @@ def test_committed_money_catches_picks_that_fit_alone_but_not_together(limits):
         state = PortfolioState(
             committed_total=committed, committed_by_strategy={}, committed_by_sector={},
             committed_by_stock={}, week_committed=0.0, loss_tier=TIER_OK, in_universe=True,
+            universe_age_days=30, upcoming_ex_dates_known=True,
             panel_age_trading_days=0, corporate_actions_age_trading_days=0, snapshot_present=True,
         )
         decision = evaluate(request, state, limits, STAGE_BEFORE_PROPOSAL)
@@ -350,3 +376,5 @@ def test_shipped_limits_match_the_agreed_numbers(limits):
     assert limits['risk']['max_per_trade'] == 1000
     assert limits['tiers'] == {'alert': 0.10, 'no_new_buys': 0.15, 'halt': 0.20}
     assert limits['corporate_actions']['blackout_trading_days'] == 5
+    assert limits['instrument']['surveillance_check'] is False
+    assert limits['freshness']['universe_max_age_days'] == 214
