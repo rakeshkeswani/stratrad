@@ -45,10 +45,15 @@ def test_every_order_caller_goes_through_the_guardrail_service():
     assert offenders == [], f'order endpoint used without the guardrail service: {offenders}'
 
 
+# The endpoint URLs alone: calling the broker's own methods (broker.place_gtt(clearance)) is how callers are SUPPOSED
+# to reach Kite, so those calls are covered by the guardrail-service test above, not by this one.
+URL_PATTERN = re.compile(r"""['"]/(orders|gtt)(/|['"])""")
+
+
 def test_only_the_broker_names_order_endpoints():
     """ST-009: execution/broker.py is the one Kite writer, and it writes from guardrail clearances only."""
     writers = sorted(path.relative_to(REPO).as_posix() for path in _code_files()
-                     if ORDER_PATTERN.search(path.read_text(encoding='utf-8')))
+                     if URL_PATTERN.search(path.read_text(encoding='utf-8')))
     assert [w for w in writers if w not in REVIEWED] == ['execution/broker.py']
 
 

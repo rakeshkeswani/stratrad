@@ -115,3 +115,12 @@ starts in `~/claude-work`, whose trust is saved. (2) Pasting a block that contai
 swallows the rest of the block the same way. Remote Control sessions follow the claude.ai account, not the Linux user,
 and so do claude.ai connectors -- a second Linux user logged in as Rakesh sees his Google Drive unless connectors are
 disabled for it.
+
+## Kite Connect Personal app: no quotes; GTTs work on holidays (2026-11-10, ST-009)
+
+`/quote/ltp` returns 403 PermissionException on stratrad's free Personal app -- market data is not in the plan. The
+holdings row (and today's positions row) carries `last_price`, which is all the sell side needs, since it only ever
+acts on held stock. Kite lists a holding under the exchange it was bought on (`BSE` for some), so filter holdings by
+symbol, not exchange. GTT place / modify / delete all worked on a market holiday, and a GTT's MARKET leg accepts and
+echoes `market_protection: -1`. Running a script with a placeholder argument (`--symbol SYMBOL`) is harmless when the
+script fails closed on unknown data -- it did.
