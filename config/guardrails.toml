@@ -52,6 +52,17 @@ snapshot_required = true
 # The universe review in force must be recent: reviews are semi-annual, so older than ~7 months = a missed review.
 universe_max_age_days = 214
 
+[sell]
+# ST-009: sells and GTT stops. Hard checks only (S01-S06); sells are never asked about.
+# A GTT places a MARKET sell with market protection, so a gap-down still fills (ST-009 decision 3a).
+order_type = "MARKET"
+# Kite's market_protection for those sells. PROVISIONAL: set from what the API accepts in the ST-009 dry run.
+market_protection = -1
+kite_min_trigger_gap = 0.0025         # Kite disables a GTT within 0.25% of the last price (stocks > Rs 50)
+trailing_min_step = 0.005             # modify a GTT only when the stop rises by at least 0.5%
+backstop_minutes = 15                 # intraday check for triggered GTTs whose sell did not fully fill
+probe_max_trigger_fraction = 0.5      # dry-run GTT: trigger at most 50% of the last price, quantity 1
+
 [news]
 # G14: hook only until news lands in Track F. Disabled = logged as not-evaluated, never blocks.
 enabled = false

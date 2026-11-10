@@ -19,6 +19,7 @@ from execution.guardrail_service import (
     aggregate,
     approval_covers,
     approval_details,
+    authorise_buy,
     check_before_order,
     check_before_proposal,
     week_start,
@@ -214,6 +215,25 @@ def test_before_order_refuses_an_unapproved_proposal(limits, calendar):
 def test_before_order_unknown_proposal_raises(limits, calendar):
     with pytest.raises(ValueError):
         check_before_order(99, sources=FakeSources(), limits=limits, calendar=calendar, on=ON)
+
+
+# ---- authorise_buy (ST-009): a clearance only on ALLOW, only after the event row --------------------------------------
+
+def test_authorise_buy_blocked_gives_no_clearance(limits, calendar):
+    src = FakeSources(proposals={7: _proposal()})
+    d, c = authorise_buy(7, sources=src, limits=limits, calendar=calendar, on=ON)
+    assert d.outcome == BLOCK and c is None           # today G12 blocks every buy
+    assert len(src.events) == 1
+
+
+def test_authorise_buy_allow_mints_clearance_from_the_proposal(limits, calendar, monkeypatch):
+    from execution import guardrail_service as gs
+    from execution.guardrails import Decision
+    monkeypatch.setattr(gs, 'evaluate', lambda *a, **k: Decision(outcome=ALLOW, detail='ok'))
+    src = FakeSources(proposals={7: _proposal(qty=12, price=81.5)})
+    d, c = authorise_buy(7, sources=src, limits=limits, calendar=calendar, on=ON)
+    assert d.outcome == ALLOW
+    assert (c.action, c.symbol, c.qty, c.limit_price, c.proposal_id, c.event_id) == ('buy', 'INFY', 12, 81.5, 7, 1)
 
 
 # ---- approvals (the falsifying clause: an over-limit allow must point to Rakesh's approval) --------------------------

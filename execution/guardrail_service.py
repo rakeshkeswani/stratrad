@@ -18,6 +18,12 @@ Soft limits ASK; an ASK becomes an ALLOW at `before_order` only when Rakesh's ap
 by ST-011) covers every current breach at no larger an overage. Otherwise it asks again.
 
 Every source is reached through `Sources`, so the service is tested without a database (tests use a fake).
+
+ST-009 adds the sell side and CLEARANCES. `check_before_sell` (sell orders and GTT place / modify / delete; hard
+checks S01-S06 in execution/guardrails.py) and `authorise_buy` (the entry order) return a one-time `Clearance` on an
+ALLOW, issued only after the `guardrail_events` row is written. execution/broker.py builds every Kite write from a
+clearance alone and refuses one that is forged, used, stale or for another action -- so no order reaches Kite without
+a guardrail check and its event row.
 """
 
 from __future__ import annotations
@@ -37,13 +43,20 @@ from execution.guardrails import (
     ALLOW,
     ASK,
     BLOCK,
+    GTT_DELETE,
+    SELL,
+    STAGE_BEFORE_GTT,
     STAGE_BEFORE_ORDER,
     STAGE_BEFORE_PROPOSAL,
+    STAGE_BEFORE_SELL,
     BuyRequest,
     Decision,
     Finding,
+    LotState,
     PortfolioState,
+    SellRequest,
     evaluate,
+    evaluate_sell,
     load_limits,
 )
 
@@ -55,6 +68,57 @@ CONFIG_PATH = REPO_ROOT / 'config' / 'guardrails.toml'
 APPROVAL_ACTION = 'guardrail_approval'   # audit_log.action for Rakesh approving a lot's soft-limit breaches (ST-011)
 OVERAGE_TOLERANCE = 0.01                 # rupees; rounding slack when comparing an overage to the approved one
 RULE_NOT_APPROVED = 'G00'                # before_order only: the proposal must be approved by Rakesh
+BUY = 'buy'                              # the entry order's clearance action
+CLEARANCE_TTL = timedelta(seconds=60)    # a clearance older than this is refused: the state it was judged on has moved
+_ISSUER = object()                       # only this module can mint a Clearance the broker accepts
+
+
+@dataclass
+class Clearance:
+    """Permission for exactly one Kite write, minted by this module after a check and its event row.
+
+    execution/broker.py builds the request from these fields only. `redeem()` is called by the broker and fails if the
+    clearance is forged, used, stale or for another action.
+    """
+
+    action: str                       # 'buy' | 'sell' | 'gtt_place' | 'gtt_modify' | 'gtt_delete'
+    symbol: str
+    qty: int
+    event_id: int
+    issued_at: datetime
+    position_id: int | None = None
+    proposal_id: int | None = None
+    trigger_price: float | None = None
+    limit_price: float | None = None
+    last_price: float | None = None
+    gtt_id: int | None = None
+    order_type: str = 'LIMIT'
+    product: str = 'CNC'
+    market_protection: float | None = None
+    probe: bool = False
+    _issuer: object = field(default=None, repr=False)
+    used: bool = False
+
+    def redeem(self, action: str, now: datetime | None = None) -> None:
+        """Mark used; raise ClearanceRefused unless genuine, unused, fresh and for `action`."""
+        if self._issuer is not _ISSUER:
+            raise ClearanceRefused('clearance not issued by the guardrail service')
+        if self.used:
+            raise ClearanceRefused(f'clearance for event {self.event_id} already used')
+        if self.action != action:
+            raise ClearanceRefused(f'clearance is for {self.action}, not {action}')
+        age = (now or datetime.now(IST)) - self.issued_at
+        if age > CLEARANCE_TTL:
+            raise ClearanceRefused(f'clearance is {age.total_seconds():.0f}s old (limit {CLEARANCE_TTL.seconds}s)')
+        self.used = True
+
+
+class ClearanceRefused(Exception):
+    """The broker would not use a clearance."""
+
+
+def _mint(**fields) -> Clearance:
+    return Clearance(_issuer=_ISSUER, issued_at=datetime.now(IST), **fields)
 
 
 # ---- what the sources return ---------------------------------------------------------------------------------------
@@ -97,6 +161,18 @@ class Sources(Protocol):
     def proposal(self, proposal_id: int) -> Proposal | None: ...
     def approval(self, approval_id: int) -> dict | None: ...
     def write_event(self, row: dict) -> int: ...
+    # ST-009 (sell side)
+    def lot(self, position_id: int) -> dict | None: ...               # status, strategy, symbol, qty
+    def active_gtt(self, position_id: int) -> dict | None: ...        # the lot's active GTT: kite_gtt_id, trigger_price
+    def gtt_is_a_lots(self, kite_gtt_id: int) -> bool: ...            # does gtt_orders know this GTT
+
+
+class MarketView(Protocol):
+    """Live facts from Kite the sell checks need (execution/broker.py implements it)."""
+
+    def holding_qty(self, symbol: str) -> int | None: ...
+    def last_price(self, symbol: str) -> float | None: ...
+    def gtt_status(self, kite_gtt_id: int) -> str | None: ...
 
 
 # ---- pure helpers ---------------------------------------------------------------------------------------------------
@@ -268,7 +344,30 @@ def check_before_order(proposal_id: int, approval_id: int | None = None, *, sour
 
     The proposal must be approved (G00). The proposal itself is left out of committed money so it is not counted
     twice. An ASK becomes an ALLOW only when `approval_id` covers every current breach (approval_covers).
+    To place the order, use `authorise_buy`, which runs this check and mints the clearance the broker needs.
     """
+    decision, _request, _event_id = _before_order(proposal_id, approval_id, sources=sources, limits=limits,
+                                                  calendar=calendar, on=on, write=write)
+    return decision
+
+
+def authorise_buy(proposal_id: int, approval_id: int | None = None, *, sources: Sources,
+                  limits: dict | None = None, calendar: TradingCalendar | None = None,
+                  on: date | None = None) -> tuple[Decision, Clearance | None]:
+    """`check_before_order`, plus a one-time clearance for the buy LIMIT order when it allows (ST-009)."""
+    decision, request, event_id = _before_order(proposal_id, approval_id, sources=sources, limits=limits,
+                                                calendar=calendar, on=on, write=True)
+    if decision.outcome != ALLOW or event_id is None:
+        return decision, None
+    return decision, _mint(action=BUY, symbol=request.symbol, qty=request.qty, event_id=event_id,
+                           proposal_id=proposal_id, limit_price=request.limit_price, order_type='LIMIT',
+                           product=request.product)
+
+
+def _before_order(proposal_id: int, approval_id: int | None, *, sources: Sources, limits: dict | None,
+                  calendar: TradingCalendar | None, on: date | None, write: bool
+                  ) -> tuple[Decision, BuyRequest, int | None]:
+    """The body of check_before_order; also returns the request and the event id."""
     limits = limits or load_limits(CONFIG_PATH)
     calendar = calendar or TradingCalendar()
     on = on or today_ist()
@@ -295,11 +394,58 @@ def check_before_order(proposal_id: int, approval_id: int | None = None, *, sour
         else:
             notes['approval_not_covering'] = approval_id
 
+    event_id = None
     if write:
-        notes['event_id'] = sources.write_event(_event(STAGE_BEFORE_ORDER, decision, request, state, limits, notes,
-                                                       proposal_id=proposal_id, approval_id=used_approval))
+        event_id = sources.write_event(_event(STAGE_BEFORE_ORDER, decision, request, state, limits, notes,
+                                              proposal_id=proposal_id, approval_id=used_approval))
     logger.info('guardrails before_order proposal %s: %s %s', proposal_id, decision.outcome, decision.rule)
-    return decision
+    return decision, request, event_id
+
+
+# ---- sell side (ST-009) --------------------------------------------------------------------------------------------
+
+def gather_lot_state(req: SellRequest, *, sources: Sources, market: MarketView) -> LotState:
+    """Read what the sell rules need. A probe has no lot: only the holding, the price and the GTT's ownership."""
+    holding = market.holding_qty(req.symbol)
+    price = market.last_price(req.symbol)
+    gtt_status = market.gtt_status(req.gtt_id) if req.gtt_id is not None else None
+    belongs = sources.gtt_is_a_lots(req.gtt_id) if req.gtt_id is not None else None
+    if req.probe or req.position_id is None:
+        return LotState(holding_qty=holding, last_price=price, gtt_status=gtt_status, gtt_belongs_to_lot=belongs)
+    row = sources.lot(req.position_id)
+    if row is None:
+        return LotState(holding_qty=holding, last_price=price, gtt_status=gtt_status, gtt_belongs_to_lot=belongs)
+    active = sources.active_gtt(req.position_id)
+    return LotState(exists=True, status=row['status'], strategy=row['strategy'], symbol=row['symbol'], qty=row['qty'],
+                    active_trigger=None if active is None else float(active['trigger_price']),
+                    gtt_status=gtt_status, gtt_belongs_to_lot=belongs, holding_qty=holding, last_price=price)
+
+
+def check_before_sell(req: SellRequest, *, sources: Sources, market: MarketView, limits: dict | None = None
+                      ) -> tuple[Decision, Clearance | None]:
+    """Hard checks for a sell or a GTT action; one event row; a clearance on ALLOW (never without the row)."""
+    limits = limits or load_limits(CONFIG_PATH)
+    lot = gather_lot_state(req, sources=sources, market=market)
+    decision = evaluate_sell(req, lot, limits)
+    stage = STAGE_BEFORE_SELL if req.action == SELL else STAGE_BEFORE_GTT
+    event_id = sources.write_event({
+        'stage': stage,
+        'rule': ','.join(f.rule for f in decision.findings) or 'OK',
+        'decision': decision.outcome,
+        'proposal_id': None,
+        'approval_id': None,
+        'limits': _json({'sell': limits['sell'], 'instrument': limits['instrument']}),
+        'context': _json({'request': dataclasses.asdict(req), 'lot': dataclasses.asdict(lot),
+                          'findings': [dataclasses.asdict(f) for f in decision.findings], 'detail': decision.detail}),
+    })
+    logger.info('guardrails %s %s %s: %s %s', stage, req.action, req.symbol, decision.outcome, decision.rule)
+    if decision.outcome != ALLOW:
+        return decision, None
+    order_type = None if req.action == GTT_DELETE else req.order_type
+    return decision, _mint(action=req.action, symbol=req.symbol, qty=req.qty, event_id=event_id,
+                           position_id=req.position_id, trigger_price=req.trigger_price, gtt_id=req.gtt_id,
+                           last_price=lot.last_price, order_type=order_type or 'MARKET', product=req.product,
+                           market_protection=limits['sell']['market_protection'], probe=req.probe)
 
 
 # ---- the real sources ----------------------------------------------------------------------------------------------
@@ -432,6 +578,25 @@ class DbSources:
             cur.execute('SELECT actor, action, details FROM audit_log WHERE id = %s', (approval_id,))
             r = cur.fetchone()
         return {'actor': r[0], 'action': r[1], 'details': r[2]} if r else None
+
+    def lot(self, position_id: int) -> dict | None:
+        with self._app_conn().cursor() as cur:
+            cur.execute('SELECT p.status, s.name, p.symbol, p.entry_qty FROM positions p '
+                        'JOIN strategies s ON s.id = p.strategy_id WHERE p.id = %s', (position_id,))
+            r = cur.fetchone()
+        return None if r is None else {'status': r[0], 'strategy': r[1], 'symbol': r[2], 'qty': r[3]}
+
+    def active_gtt(self, position_id: int) -> dict | None:
+        with self._app_conn().cursor() as cur:
+            cur.execute("SELECT kite_gtt_id, trigger_price FROM gtt_orders WHERE position_id = %s AND status = 'active' "
+                        'ORDER BY id DESC LIMIT 1', (position_id,))
+            r = cur.fetchone()
+        return None if r is None else {'kite_gtt_id': r[0], 'trigger_price': float(r[1])}
+
+    def gtt_is_a_lots(self, kite_gtt_id: int) -> bool:
+        with self._app_conn().cursor() as cur:
+            cur.execute('SELECT 1 FROM gtt_orders WHERE kite_gtt_id = %s LIMIT 1', (kite_gtt_id,))
+            return cur.fetchone() is not None
 
     def write_event(self, row: dict) -> int:
         from psycopg.types.json import Jsonb

@@ -26,9 +26,18 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-# Stages a check can run at (docs/DATA_MODEL.md section 5).
+# Stages a check can run at (docs/DATA_MODEL.md section 5; the sell stages are ST-009, migration 003).
 STAGE_BEFORE_PROPOSAL = 'before_proposal'
 STAGE_BEFORE_ORDER = 'before_order'
+STAGE_BEFORE_SELL = 'before_sell'
+STAGE_BEFORE_GTT = 'before_gtt'
+
+# What a sell-side check can be asked to allow (ST-009).
+SELL = 'sell'
+GTT_PLACE = 'gtt_place'
+GTT_MODIFY = 'gtt_modify'
+GTT_DELETE = 'gtt_delete'
+SELL_ACTIONS = (SELL, GTT_PLACE, GTT_MODIFY, GTT_DELETE)
 
 # Outcomes; the same strings go into guardrail_events.decision (migration 002 adds 'ask').
 ALLOW = 'allow'
@@ -163,7 +172,7 @@ def load_limits(path: Path) -> dict[str, Any]:
     except tomllib.TOMLDecodeError as exc:
         raise GuardrailConfigError(f'guardrails config is not valid TOML: {path}: {exc}') from exc
 
-    required = ('capital', 'risk', 'tiers', 'instrument', 'corporate_actions', 'freshness', 'news')
+    required = ('capital', 'risk', 'tiers', 'instrument', 'corporate_actions', 'freshness', 'news', 'sell')
     missing = [section for section in required if section not in limits]
     if missing:
         raise GuardrailConfigError(f'guardrails config {path} is missing sections: {", ".join(missing)}')
@@ -425,3 +434,162 @@ def evaluate(request: BuyRequest, state: PortfolioState, limits: dict[str, Any],
         return Decision(outcome=ASK, detail=detail, findings=tuple(findings), flags=tuple(flags))
     return Decision(outcome=ALLOW, detail=f'{request.symbol} Rs {request.amount:,.2f} allowed',
                     findings=(), flags=tuple(flags))
+
+
+# ---- sell side (ST-009): sells protect, so they are never asked about -- only mistakes are blocked ---------------------
+
+@dataclass(frozen=True)
+class SellRequest:
+    """A sell order, or a GTT placed / modified / deleted, for one stratrad lot.
+
+    `probe` marks the ST-009 dry run against Kite: a quantity-1 GTT far below the market on a stock Rakesh holds,
+    which is never a stratrad lot. It has its own narrow rules (S06).
+    """
+
+    action: str
+    symbol: str
+    qty: int
+    position_id: int | None = None
+    trigger_price: float | None = None
+    gtt_id: int | None = None
+    product: str = 'CNC'
+    order_type: str = 'MARKET'
+    probe: bool = False
+
+
+@dataclass(frozen=True)
+class LotState:
+    """What the service found about the lot, the holding and the market. None = not known, which blocks."""
+
+    exists: bool = False
+    status: str | None = None              # 'open' / 'closed'
+    strategy: str | None = None
+    symbol: str | None = None
+    qty: int | None = None
+    active_trigger: float | None = None    # trigger of the lot's active GTT, if it has one
+    gtt_status: str | None = None          # status of the GTT the request is about (modify / delete)
+    gtt_belongs_to_lot: bool | None = None  # does `gtt_id` appear in gtt_orders at all
+    holding_qty: int | None = None         # Kite's holding of the symbol
+    last_price: float | None = None
+
+
+def _sell_block(rule: str, detail: str) -> Finding:
+    return Finding(rule=rule, outcome=BLOCK, detail=detail)
+
+
+def _check_probe(req: SellRequest, lot: LotState, limits: dict[str, Any]) -> list[Finding]:
+    """S06: the dry-run GTT. Quantity 1, far below the market, on a stock held, never touching a lot's GTT."""
+    sell = limits['sell']
+    if req.action == SELL:
+        return [_sell_block('S06', 'a probe may not sell')]
+    if req.action == GTT_DELETE:
+        if lot.gtt_belongs_to_lot is not False:
+            return [_sell_block('S06', f'GTT {req.gtt_id} belongs to a lot (or is unknown); a probe may not delete it')]
+        return []
+    if req.qty != 1:
+        return [_sell_block('S06', f'a probe GTT has quantity 1, not {req.qty}')]
+    if lot.holding_qty is None or lot.holding_qty < 1:
+        return [_sell_block('S06', f'{req.symbol} is not held (holding {lot.holding_qty})')]
+    if lot.last_price is None or req.trigger_price is None:
+        return [_sell_block('S06', 'last price or trigger unknown')]
+    ceiling = lot.last_price * sell['probe_max_trigger_fraction']
+    if req.trigger_price > ceiling:
+        return [_sell_block('S06', f'probe trigger {req.trigger_price} is above {ceiling:.2f} '
+                                   f'({sell["probe_max_trigger_fraction"]:.0%} of the last price)')]
+    if req.action == GTT_MODIFY and lot.gtt_belongs_to_lot is not False:
+        return [_sell_block('S06', f'GTT {req.gtt_id} belongs to a lot (or is unknown); a probe may not modify it')]
+    return []
+
+
+def _check_lot(req: SellRequest, lot: LotState, limits: dict[str, Any]) -> list[Finding]:
+    """S01: an open stratrad lot, on this symbol. A delete may also target a closed lot (cleanup)."""
+    if not lot.exists:
+        return [_sell_block('S01', f'lot {req.position_id} not found')]
+    if lot.strategy is None or lot.strategy == MANUAL_STRATEGY:
+        return [_sell_block('S01', f'lot {req.position_id} is not a stratrad lot (strategy {lot.strategy!r})')]
+    if lot.symbol != req.symbol:
+        return [_sell_block('S01', f'lot {req.position_id} is {lot.symbol}, not {req.symbol}')]
+    if req.action != GTT_DELETE and lot.status != 'open':
+        return [_sell_block('S01', f'lot {req.position_id} is {lot.status}, not open')]
+    return []
+
+
+def _check_quantity(req: SellRequest, lot: LotState, limits: dict[str, Any]) -> list[Finding]:
+    """S02: never more than the lot, never more than Kite holds; a GTT covers exactly its lot."""
+    if req.action == GTT_DELETE:
+        return []
+    if req.qty <= 0 or lot.qty is None:
+        return [_sell_block('S02', f'quantity {req.qty} invalid or lot quantity unknown')]
+    if req.action in (GTT_PLACE, GTT_MODIFY) and req.qty != lot.qty:
+        return [_sell_block('S02', f'a GTT covers exactly its lot: {req.qty} != lot {lot.qty}')]
+    if req.qty > lot.qty:
+        return [_sell_block('S02', f'quantity {req.qty} exceeds the lot ({lot.qty})')]
+    if lot.holding_qty is None:
+        return [_sell_block('S02', f'Kite holding of {req.symbol} unknown')]
+    if req.qty > lot.holding_qty:
+        return [_sell_block('S02', f'quantity {req.qty} exceeds Kite holding ({lot.holding_qty})')]
+    return []
+
+
+def _check_stop(req: SellRequest, lot: LotState, limits: dict[str, Any]) -> list[Finding]:
+    """S03: a stop below the market by Kite's minimum gap; only ever raised; one active GTT per lot."""
+    if req.action not in (GTT_PLACE, GTT_MODIFY):
+        return []
+    if req.trigger_price is None or req.trigger_price <= 0:
+        return [_sell_block('S03', 'no trigger price')]
+    if lot.last_price is None:
+        return [_sell_block('S03', f'last price of {req.symbol} unknown')]
+    ceiling = lot.last_price * (1 - limits['sell']['kite_min_trigger_gap'])
+    if req.trigger_price >= ceiling:
+        return [_sell_block('S03', f'trigger {req.trigger_price} is not below {ceiling:.2f} '
+                                   f'(Kite needs {limits["sell"]["kite_min_trigger_gap"]:.2%} below the last price)')]
+    if req.action == GTT_PLACE and lot.active_trigger is not None:
+        return [_sell_block('S03', f'lot {req.position_id} already has an active GTT at {lot.active_trigger}')]
+    if req.action == GTT_MODIFY:
+        if lot.active_trigger is None:
+            return [_sell_block('S03', f'lot {req.position_id} has no active GTT to modify')]
+        if req.trigger_price < lot.active_trigger:
+            return [_sell_block('S03', f'stops only move up: {req.trigger_price} < current {lot.active_trigger}')]
+    return []
+
+
+def _check_shape(req: SellRequest, lot: LotState, limits: dict[str, Any]) -> list[Finding]:
+    """S04: CNC, and the configured order type for sells and GTT orders."""
+    if req.action == GTT_DELETE:
+        return []
+    if req.product != limits['instrument']['product']:
+        return [_sell_block('S04', f'product {req.product} is not {limits["instrument"]["product"]}')]
+    if req.order_type != limits['sell']['order_type']:
+        return [_sell_block('S04', f'order type {req.order_type} is not {limits["sell"]["order_type"]}')]
+    return []
+
+
+def _check_delete(req: SellRequest, lot: LotState, limits: dict[str, Any]) -> list[Finding]:
+    """S05: deleting an active GTT on an open lot removes its protection."""
+    if req.action != GTT_DELETE:
+        return []
+    if lot.gtt_status is None:
+        return [_sell_block('S05', f'status of GTT {req.gtt_id} unknown')]
+    if lot.status == 'open' and lot.gtt_status == 'active':
+        return [_sell_block('S05', f'GTT {req.gtt_id} protects open lot {req.position_id}; it is replaced, not deleted')]
+    return []
+
+
+SELL_CHECKS = (_check_lot, _check_quantity, _check_stop, _check_shape, _check_delete)
+
+
+def evaluate_sell(req: SellRequest, lot: LotState, limits: dict[str, Any]) -> Decision:
+    """Check one sell or GTT action. Only ALLOW or BLOCK: sells protect, so nothing is asked about."""
+    if req.action not in SELL_ACTIONS:
+        raise ValueError(f'unknown sell action: {req.action!r}')
+    findings: list[Finding] = []
+    if req.probe:
+        findings.extend(_check_probe(req, lot, limits))
+    else:
+        for check in SELL_CHECKS:
+            findings.extend(check(req, lot, limits))
+    if findings:
+        return Decision(outcome=BLOCK, detail='; '.join(f'{f.rule}: {f.detail}' for f in findings),
+                        findings=tuple(findings))
+    what = f'{req.action} {req.symbol} x{req.qty}' + (f' trigger {req.trigger_price}' if req.trigger_price else '')
+    return Decision(outcome=ALLOW, detail=f'{what} allowed' + (' (probe)' if req.probe else ''))

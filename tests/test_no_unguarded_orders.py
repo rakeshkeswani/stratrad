@@ -45,6 +45,13 @@ def test_every_order_caller_goes_through_the_guardrail_service():
     assert offenders == [], f'order endpoint used without the guardrail service: {offenders}'
 
 
+def test_only_the_broker_names_order_endpoints():
+    """ST-009: execution/broker.py is the one Kite writer, and it writes from guardrail clearances only."""
+    writers = sorted(path.relative_to(REPO).as_posix() for path in _code_files()
+                     if ORDER_PATTERN.search(path.read_text(encoding='utf-8')))
+    assert [w for w in writers if w not in REVIEWED] == ['execution/broker.py']
+
+
 def test_reviewed_exceptions_still_exist_and_still_need_reviewing():
     """A stale exception would hide a future file of the same name; each must exist and still name an endpoint."""
     for rel in REVIEWED:
