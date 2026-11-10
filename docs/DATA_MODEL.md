@@ -84,7 +84,7 @@ updates; raw broker payloads kept as `jsonb`; schema changes only through number
 | `signals` | stock x run | run_date, strategy_id, model_id, symbol, isin, sector, score, rank, rationale (jsonb) | ST-011 |
 | `proposals` | proposed buy | signal_id, symbol, sector, qty, limit_price, stop_price, amount, status (pending / approved / rejected / expired / blocked), decided_at, telegram ids | ST-011 |
 | `orders` | Kite order | proposal_id or position_id, kite_order_id, symbol, instrument_token, side, qty, price, type, reason (entry / stop / manual / exit), status, filled_qty, **avg_price** (Kite's average fill price), raw (jsonb) | ST-006/007 |
-| `order_charges` | executed order | order_id, brokerage, stt, exchange_txn, sebi, stamp_duty, gst, total, source (virtual_contract_note / contract_note), reconciled_at | ST-006/009 |
+| `order_charges` | executed order | order_id, brokerage, stt, exchange_txn, sebi, stamp_duty, gst, total, source (estimate / virtual_contract_note / contract_note; `estimate` = backtest/costs.py rates, migration 004), reconciled_at | ST-006/009 |
 | `gtt_orders` | Kite GTT | position_id, kite_gtt_id, trigger_price, limit_price (NULL for a MARKET leg, migration 003), status | ST-009 |
 | `positions` | holding lot (stratrad strategies and `manual`) | symbol, isin, instrument_token, sector, strategy_id, entry date/price/qty, exit date/price/qty, exit_reason (stop / trail / time / manual / rule; `time` migration 003), status, realised_pnl (net of charges) | ST-009 |
 | `position_adjustments` | corporate action on a held lot | position_id, ex_date, action_type, factor, qty before/after, entry price before/after, stop before/after | ST-009 |
