@@ -105,6 +105,13 @@ class Broker:
             logger.warning('gtt_status %s unknown: %s', kite_gtt_id, e)
             return None
 
+    def gtt_trigger(self, kite_gtt_id: int) -> float | None:
+        try:
+            return float(self.gtt(kite_gtt_id)['condition']['trigger_values'][0])
+        except (KiteError, requests.RequestException, ValueError, TypeError, KeyError, IndexError) as e:
+            logger.warning('gtt_trigger %s unknown: %s', kite_gtt_id, e)
+            return None
+
     # ---- writes (proxy, from a clearance only) ----------------------------------------------------------------------
 
     def _write(self, method: str, path: str, form: dict | None, c: Clearance, action: str,

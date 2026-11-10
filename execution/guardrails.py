@@ -496,8 +496,13 @@ def _check_probe(req: SellRequest, lot: LotState, limits: dict[str, Any]) -> lis
     if req.trigger_price > ceiling:
         return [_sell_block('S06', f'probe trigger {req.trigger_price} is above {ceiling:.2f} '
                                    f'({sell["probe_max_trigger_fraction"]:.0%} of the last price)')]
-    if req.action == GTT_MODIFY and lot.gtt_belongs_to_lot is not False:
-        return [_sell_block('S06', f'GTT {req.gtt_id} belongs to a lot (or is unknown); a probe may not modify it')]
+    if req.action == GTT_MODIFY:
+        if lot.gtt_belongs_to_lot is not False:
+            return [_sell_block('S06', f'GTT {req.gtt_id} belongs to a lot (or is unknown); a probe may not modify it')]
+        if lot.active_trigger is None:
+            return [_sell_block('S06', f'current trigger of GTT {req.gtt_id} unknown')]
+        if req.trigger_price < lot.active_trigger:
+            return [_sell_block('S06', f'stops only move up: {req.trigger_price} < current {lot.active_trigger}')]
     return []
 
 

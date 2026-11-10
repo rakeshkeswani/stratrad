@@ -145,11 +145,19 @@ def test_holding_qty_counts_t1_and_todays_cnc_buys():
     assert _broker(rec).holding_qty('INFY') == 10
 
 
+def test_gtt_trigger_read_from_kite():
+    rec = Recorder({'/gtt/triggers/9': {'id': 9, 'status': 'active',
+                                        'condition': {'tradingsymbol': 'RELIANCE', 'trigger_values': [450.5]}}})
+    b = _broker(rec)
+    assert b.gtt_trigger(9) == 450.5 and b.gtt_status(9) == 'active'
+
+
 def test_unknown_reads_return_none():
     rec = Recorder({'/portfolio/holdings': Resp(None, status=500), '/gtt/triggers/9': Resp(None, status=400),
                     '/quote/ltp': {}})
     b = _broker(rec)
     assert b.holding_qty('INFY') is None and b.gtt_status(9) is None and b.last_price('INFY') is None
+    assert b.gtt_trigger(9) is None
 
 
 def test_kite_error_message_has_no_token():
