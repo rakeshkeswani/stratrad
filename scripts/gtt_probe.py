@@ -3,7 +3,7 @@
 """
 ST-009 piece 2 -- the dry run against Kite (prod only). Proves the sell path end to end without selling anything.
 
-On a stock Rakesh holds (default RELIANCE), never a stratrad lot:
+On a stock Rakesh holds (named with --symbol), never a stratrad lot:
   1. place a quantity-1 GTT, trigger at ~45% of the last price, MARKET sell leg with market protection
   2. read it back and check symbol, quantity, trigger and order shape
   3. raise the trigger to ~46% and read it back
@@ -15,7 +15,7 @@ Every Kite write goes check_before_sell -> clearance -> execution/broker.py. The
 are at most 20% a day. If any step fails after the place, the script still tries the guarded delete and prints the GTT
 id, so nothing is left behind. Exit 0 = every check passed; 1 = a check failed (details logged); 2 = could not start.
 
-Usage (prod, repo root, after the morning Kite login):  python -m scripts.gtt_probe [--symbol RELIANCE]
+Usage (prod, repo root, after the day's Kite login):  python -m scripts.gtt_probe --symbol <a held stock>
 """
 
 from __future__ import annotations
@@ -160,7 +160,7 @@ def _events_since(sources: DbSources, after: int) -> list[tuple]:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
-    ap.add_argument('--symbol', default='RELIANCE')
+    ap.add_argument('--symbol', required=True, help='an NSE symbol Rakesh holds (not a stratrad lot)')
     args = ap.parse_args(argv)
     _setup_logging()
     try:

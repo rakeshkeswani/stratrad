@@ -128,21 +128,40 @@ def test_no_proxy_no_write_and_clearance_not_burned():
     assert rec.calls == [] and not c.used
 
 
-def test_reads_are_direct():
-    rec = Recorder({'/quote/ltp': {'NSE:INFY': {'instrument_token': 1, 'last_price': 101.25}}})
-    assert _broker(rec).last_price('INFY') == 101.25
-    assert 'proxies' not in rec.calls[0][2]
+def test_reads_are_direct_and_price_comes_from_holdings():
+    """The Personal app has no /quote permission (403 on prod 2026-11-10): the price is the holding row's."""
+    rec = Recorder({'/portfolio/holdings': [{'tradingsymbol': 'INFY', 'exchange': 'BSE', 'quantity': 4,
+                                             'last_price': 101.25}],
+                    '/portfolio/positions': {'day': [], 'net': []}})
+    b = _broker(rec)
+    assert b.last_price('INFY') == 101.25
+    assert not any(u.endswith('/quote/ltp') for _, u, _ in rec.calls)
+    assert all('proxies' not in kw for _, _, kw in rec.calls)
+
+
+def test_price_from_todays_position_when_bought_today():
+    rec = Recorder({'/portfolio/holdings': [],
+                    '/portfolio/positions': {'day': [{'tradingsymbol': 'INFY', 'exchange': 'NSE', 'product': 'CNC',
+                                                      'quantity': 3, 'last_price': 99.5}], 'net': []}})
+    b = _broker(rec)
+    assert b.last_price('INFY') == 99.5 and b.holding_qty('INFY') == 3
+
+
+def test_not_held_means_no_price():
+    rec = Recorder({'/portfolio/holdings': [], '/portfolio/positions': {'day': [], 'net': []}})
+    assert _broker(rec).last_price('INFY') is None
 
 
 def test_holding_qty_counts_t1_and_todays_cnc_buys():
     rec = Recorder({
         '/portfolio/holdings': [{'tradingsymbol': 'INFY', 'exchange': 'NSE', 'quantity': 5, 't1_quantity': 2},
+                                {'tradingsymbol': 'INFY', 'exchange': 'BSE', 'quantity': 1, 't1_quantity': 0},
                                 {'tradingsymbol': 'TCS', 'exchange': 'NSE', 'quantity': 9, 't1_quantity': 0}],
         '/portfolio/positions': {'day': [{'tradingsymbol': 'INFY', 'exchange': 'NSE', 'product': 'CNC', 'quantity': 3},
                                          {'tradingsymbol': 'INFY', 'exchange': 'NSE', 'product': 'MIS',
                                           'quantity': 50}], 'net': []},
     })
-    assert _broker(rec).holding_qty('INFY') == 10
+    assert _broker(rec).holding_qty('INFY') == 11            # the BSE-listed row counts: one demat pool
 
 
 def test_gtt_trigger_read_from_kite():
@@ -153,8 +172,7 @@ def test_gtt_trigger_read_from_kite():
 
 
 def test_unknown_reads_return_none():
-    rec = Recorder({'/portfolio/holdings': Resp(None, status=500), '/gtt/triggers/9': Resp(None, status=400),
-                    '/quote/ltp': {}})
+    rec = Recorder({'/portfolio/holdings': Resp(None, status=500), '/gtt/triggers/9': Resp(None, status=400)})
     b = _broker(rec)
     assert b.holding_qty('INFY') is None and b.gtt_status(9) is None and b.last_price('INFY') is None
     assert b.gtt_trigger(9) is None

@@ -77,26 +77,39 @@ class Broker:
 
     # ---- MarketView (None = unknown; the sell rules block on unknown) -----------------------------------------------
 
+    def _rows(self, symbol: str) -> tuple[list, list]:
+        """Holdings rows and today's CNC position rows for `symbol`, on any exchange: demat shares are one pool, and
+        Kite lists a holding under the exchange it was bought on (an NSE sell of BSE-bought shares is fine)."""
+        held = [h for h in self.holdings() if h.get('tradingsymbol') == symbol]
+        day = [p for p in self.positions().get('day', [])
+               if p.get('tradingsymbol') == symbol and p.get('product') == 'CNC']
+        return held, day
+
     def holding_qty(self, symbol: str) -> int | None:
         """Shares sellable today: demat + T1 holdings, plus today's net CNC buys (not in holdings until T+1)."""
         try:
-            held = sum(int(h.get('quantity') or 0) + int(h.get('t1_quantity') or 0)
-                       for h in self.holdings() if h.get('tradingsymbol') == symbol and h.get('exchange') == EXCHANGE)
-            day = self.positions().get('day', [])
-            bought = sum(int(p.get('quantity') or 0) for p in day
-                         if p.get('tradingsymbol') == symbol and p.get('exchange') == EXCHANGE
-                         and p.get('product') == 'CNC')
+            held, day = self._rows(symbol)
+            return (sum(int(h.get('quantity') or 0) + int(h.get('t1_quantity') or 0) for h in held)
+                    + sum(int(p.get('quantity') or 0) for p in day))
         except (KiteError, requests.RequestException, ValueError, TypeError, AttributeError) as e:
             logger.warning('holding_qty %s unknown: %s', symbol, e)
             return None
-        return held + bought
 
     def last_price(self, symbol: str) -> float | None:
+        """Last price from the holding (or today's position) row. stratrad's Kite Connect app (Personal) has no
+        market-quote permission (/quote -> 403, 2026-11-10); every sell and GTT is on a held stock, so the holdings
+        row carries the price. None when the stock is not held -- the sell rules then block."""
         try:
-            return self.ltp(symbol)
-        except (KiteError, requests.RequestException, ValueError, TypeError, KeyError) as e:
+            held, day = self._rows(symbol)
+        except (KiteError, requests.RequestException, ValueError, TypeError, AttributeError) as e:
             logger.warning('last_price %s unknown: %s', symbol, e)
             return None
+        for row in held + day:
+            price = row.get('last_price')
+            if price:
+                return float(price)
+        logger.warning('last_price %s unknown: not in holdings or today\'s positions', symbol)
+        return None
 
     def gtt_status(self, kite_gtt_id: int) -> str | None:
         try:
