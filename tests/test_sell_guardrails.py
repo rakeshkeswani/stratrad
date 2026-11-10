@@ -156,6 +156,10 @@ class FakeMarket:
     holdings: dict = field(default_factory=lambda: {'INFY': 10, 'RELIANCE': 3})
     prices: dict = field(default_factory=lambda: {'INFY': 100.0, 'RELIANCE': 1000.0})
     statuses: dict = field(default_factory=dict)
+    triggers: dict = field(default_factory=dict)
+
+    def gtt_trigger(self, kite_gtt_id):
+        return self.triggers.get(kite_gtt_id)
 
     def holding_qty(self, symbol):
         return self.holdings.get(symbol)
@@ -202,6 +206,19 @@ def test_probe_cannot_touch_a_lots_gtt(limits):
     d, c = check_before_sell(SellRequest(GTT_DELETE, 'INFY', 1, gtt_id=7, probe=True), sources=src,
                              market=FakeMarket(), limits=limits)
     assert d.outcome == BLOCK and c is None
+
+
+def test_probe_modify_only_upward_from_kites_trigger(limits):
+    """Piece 2 dry run: the probe GTT has no lot, so S06 reads its current trigger from Kite."""
+    market = FakeMarket(triggers={9: 450.0}, statuses={9: 'active'})
+    up = SellRequest(GTT_MODIFY, 'RELIANCE', 1, trigger_price=460.0, gtt_id=9, probe=True)
+    d, c = check_before_sell(up, sources=FakeSources(), market=market, limits=limits)
+    assert d.outcome == ALLOW and c.gtt_id == 9
+    down = replace(up, trigger_price=440.0)
+    d, c = check_before_sell(down, sources=FakeSources(), market=market, limits=limits)
+    assert d.outcome == BLOCK and c is None and 'stops only move up' in d.detail
+    d, _ = check_before_sell(up, sources=FakeSources(), market=FakeMarket(), limits=limits)   # trigger unknown
+    assert d.outcome == BLOCK
 
 
 def test_clearance_is_one_shot_and_action_bound(limits):

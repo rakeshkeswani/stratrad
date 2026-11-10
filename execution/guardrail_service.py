@@ -173,6 +173,7 @@ class MarketView(Protocol):
     def holding_qty(self, symbol: str) -> int | None: ...
     def last_price(self, symbol: str) -> float | None: ...
     def gtt_status(self, kite_gtt_id: int) -> str | None: ...
+    def gtt_trigger(self, kite_gtt_id: int) -> float | None: ...
 
 
 # ---- pure helpers ---------------------------------------------------------------------------------------------------
@@ -411,7 +412,10 @@ def gather_lot_state(req: SellRequest, *, sources: Sources, market: MarketView) 
     gtt_status = market.gtt_status(req.gtt_id) if req.gtt_id is not None else None
     belongs = sources.gtt_is_a_lots(req.gtt_id) if req.gtt_id is not None else None
     if req.probe or req.position_id is None:
-        return LotState(holding_qty=holding, last_price=price, gtt_status=gtt_status, gtt_belongs_to_lot=belongs)
+        # a probe GTT has no lot row: its current trigger comes from Kite (S06: stops only rise)
+        trigger = market.gtt_trigger(req.gtt_id) if req.gtt_id is not None else None
+        return LotState(holding_qty=holding, last_price=price, gtt_status=gtt_status, gtt_belongs_to_lot=belongs,
+                        active_trigger=trigger)
     row = sources.lot(req.position_id)
     if row is None:
         return LotState(holding_qty=holding, last_price=price, gtt_status=gtt_status, gtt_belongs_to_lot=belongs)
