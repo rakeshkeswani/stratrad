@@ -14,7 +14,7 @@ Workflow, status values and gates: `CLAUDE.md` → "Change workflow".
 | [ST-006](tech-debt/ST-006.md) | Kite Connect app + daily login | High | Resolved | 2026-10-08 | execution | — (prod confirmed 2026-10-24) |
 | [ST-007](tech-debt/ST-007.md) | Static IP for Kite orders: Mumbai static-IP exit VM (Lightsail, Tailscale-only proxy) | High | In progress — rebuild drill before go-live | 2026-10-08 | execution | static IP 13.205.57.58 verified 2026-10-27; drill deferred |
 | [ST-008](tech-debt/ST-008.md) | Guardrail service + guardrails.toml | High | Resolved | 2026-10-08 | execution | — (prod confirmed 2026-11-09, merge `5a204d9`) |
-| [ST-009](tech-debt/ST-009.md) | GTT stops, trailing, daily reconciliation | High | Not started | 2026-10-08 | execution | — |
+| [ST-009](tech-debt/ST-009.md) | GTT stops, trailing, daily reconciliation | High | In progress — branch st/ST-009-gtt-stops | 2026-10-08 | execution | design approved 2026-11-10; build in pieces: broker layer + check_before_sell first, then the Kite dry run |
 | [ST-010](tech-debt/ST-010.md) | Baseline momentum strategy + quick backtest | High | Resolved | 2026-10-08 | strategy | — (prod confirmed 2026-10-15; verdict + card changes open in ST-010.md) |
 | [ST-011](tech-debt/ST-011.md) | Telegram proposal and approval flow | High | Not started | 2026-10-08 | notify | — |
 | [ST-012](tech-debt/ST-012.md) | Project database + read-only role on MyInvestIQ DB | High | Resolved | 2026-10-08 | database | — (prod confirmed 2026-10-24; CA merge moved to ST-020) |
