@@ -300,6 +300,28 @@ class Lifecycle:
                              detail={'qty': lot['qty'], 'trigger': trigger})
         report.ok('lot %s: GTT %s now x%d at %.2f', lot['id'], g['kite_gtt_id'], lot['qty'], trigger)
 
+    def reprotect(self, lot: dict, report: Report, trigger: float | None = None) -> bool:
+        """Place a GTT for an open lot that has none (piece 4 decision 3): at `trigger`, else at the last recorded stop,
+        never below the initial stop and never lower than before. The guardrails refuse it if no longer below the
+        market (S03), which alerts."""
+        if self.store.active_gtt_row(lot['id']) is not None:
+            return True
+        rules = ExitRules.from_config(lot['config'])
+        floor = initial_stop(float(lot['entry_price']), rules)
+        if trigger is None:
+            trigger = max(float(self.store.last_gtt_trigger(lot['id']) or 0.0), floor)
+        decision, c = self.gate.sell(SellRequest(GTT_PLACE, lot['symbol'], lot['qty'], position_id=lot['id'],
+                                                 trigger_price=trigger))
+        if c is None:
+            report.alert('lot %s UNPROTECTED: GTT at %.2f refused: %s', lot['id'], trigger, decision.detail)
+            return False
+        kite_id = self.broker.place_gtt(c)
+        gid = self.store.add_gtt(lot['id'], kite_id, trigger)
+        self.store.add_event(gtt_id=gid, from_status=None, to_status='active', detail={'trigger': trigger,
+                                                                                      'why': 'reprotect'})
+        report.ok('lot %s re-protected: GTT %s at %.2f', lot['id'], kite_id, trigger)
+        return True
+
     def _close_from_sell(self, row: dict, status: str, filled: int, avg: float | None, report: Report) -> None:
         lot = self.store.lot(row['position_id'])
         if lot is None or lot['status'] != 'open':
@@ -544,6 +566,10 @@ class PanelPrices:
         from core.panel import read_panel
         df = read_panel(start=start, end=end, columns=['trade_date', 'symbol', 'close'])
         return [float(c) for c in df.loc[df['symbol'] == symbol, 'close'].dropna()]
+
+    def close_on(self, symbol: str, on: date) -> float | None:
+        closes = self.closes(symbol, on, on)
+        return closes[-1] if closes else None
 
 
 def from_db(broker: Any, *, sources: Any = None, prices: Prices | None = None) -> Lifecycle:

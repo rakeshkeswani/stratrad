@@ -90,7 +90,7 @@ updates; raw broker payloads kept as `jsonb`; schema changes only through number
 | `position_adjustments` | corporate action on a held lot | position_id, ex_date, action_type, factor, qty before/after, entry price before/after, stop before/after | ST-009 |
 | `order_events` | status change | order_id / gtt_id / proposal_id, from_status, to_status, at, detail (jsonb) | ST-006+ |
 | `guardrail_events` | guardrail check | stage (before_proposal / before_order; before_sell / before_gtt from migration 003, ST-009), rule (comma-separated rule ids behind the outcome, `OK` on a clean allow), decision (allow / ask / block, migration 002), approval_id (Rakesh's approval in `audit_log`, required on an over-limit allow), limits snapshot (jsonb), context (jsonb: request, state, findings, flags, what was read) | ST-008 |
-| `daily_snapshots` | trading day | invested_at_cost, market_value, realised / unrealised pnl (net of charges), rolling 12-month loss %, tier (ok / alert / no-buys / halt), exposure by strategy and sector (jsonb) | ST-008/009 |
+| `daily_snapshots` | trading day | invested_at_cost, market_value, realised / unrealised pnl (net of charges), rolling 12-month loss %, tier (ok / alert / no-buys / halt), exposure by strategy and sector (jsonb), price_source (panel / kite / none, migration 005); stratrad lots only, written by `scripts.evening_check` | ST-008/009 |
 | `reconciliations` | day x difference | Kite holdings / GTTs vs `positions` / `gtt_orders`; monthly: `order_charges` vs the official contract note | ST-009 |
 | `audit_log` | action | actor (system / Rakesh), action, details (jsonb); append-only | all |
 

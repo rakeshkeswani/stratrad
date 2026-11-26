@@ -116,3 +116,24 @@ def test_a_lot_life_on_the_dev_database(conn):
     n = store._one('SELECT count(*) AS n FROM order_events oe JOIN orders o ON o.id = oe.order_id '
                    'WHERE o.position_id = %s', (lot_id,))['n']
     assert n >= 3
+
+
+def test_recon_store_sql_on_the_dev_database(conn):
+    """Piece 4: ReconStore's SQL (manual lots, reconciliations, snapshot upsert, adjustments), rolled back."""
+    from execution.reconcile import Diff, ReconStore, build_snapshot
+    store = ReconStore(conn, commit=False)
+    store.add_manual_lot('ZZTEST', TODAY, 591.8, 1315)
+    [m] = [l for l in store.manual_lots() if l['symbol'] == 'ZZTEST']
+    store.resize_lot(m['id'], 1300, 590.0)
+    store.close_manual_lot(m['id'], TODAY, 600.0, 1300)
+    assert store._one("SELECT status, exit_reason FROM positions WHERE id = %s", (m['id'],)) == \
+        {'status': 'closed', 'exit_reason': 'manual'}
+    store.add_reconciliation(TODAY, Diff('gtt', 'missing_gtt', 'ZZTEST', {'gtts': 1}, {'gtts': 0}))
+    assert store._one("SELECT difference->>'what' AS w FROM reconciliations WHERE symbol = 'ZZTEST'")['w'] == \
+        'missing_gtt'
+    day = date(1999, 1, 4)
+    store.upsert_snapshot(build_snapshot(day, [], {}, 'panel', 100000, {'alert': .1, 'no_new_buys': .15, 'halt': .2}))
+    store.upsert_snapshot(build_snapshot(day, [], {}, 'panel', 100000, {'alert': .1, 'no_new_buys': .15, 'halt': .2}))
+    assert store._one('SELECT count(*) AS n, max(price_source) AS s FROM daily_snapshots WHERE snapshot_date = %s',
+                      (day,)) == {'n': 1, 's': 'none'}
+    assert isinstance(store.all_kite_gtt_ids(), set)
